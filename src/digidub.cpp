@@ -16,13 +16,29 @@
 
 #include <QDebug>
 
+#include <algorithm>
 #include <iostream>
 
 constexpr const char* VERSION_STRING = "0.1";
 
+// DEBUG/PRINT HELPERS //
+
+QString formatSeconds(double val)
+{
+  int minutes = int(val) / 60;
+  double seconds = int(val) % 60;
+  seconds += (val - int(val));
+
+  const char* fmtstr = seconds < 10 ? "%1:0%2" : "%1:%2";
+  return QString(fmtstr).arg(QString::number(minutes), QString::number(seconds));
+}
+
 // FFMPEG helpers //
 
-void run_executable(const QString& name, const QStringList& args, QString* stdOut = nullptr)
+void run_executable(const QString& name,
+                    const QStringList& args,
+                    QString* stdOut = nullptr,
+                    QString* stdErr = nullptr)
 {
   QProcess instance;
   instance.setProgram(name);
@@ -43,11 +59,16 @@ void run_executable(const QString& name, const QStringList& args, QString* stdOu
   {
     *stdOut = QString::fromLocal8Bit(instance.readAllStandardOutput());
   }
+
+  if (stdErr)
+  {
+    *stdErr = QString::fromLocal8Bit(instance.readAllStandardError());
+  }
 }
 
 void run_ffmpeg(const QStringList& args, QString* stdOut = nullptr)
 {
-  run_executable("ffmpeg", args, stdOut);
+  run_executable("ffmpeg", args, nullptr, stdOut);
 }
 
 void run_ffprobe(const QStringList& args, QString* stdOut = nullptr)
@@ -61,6 +82,7 @@ struct VideoFrameInfo
 {
   int pts;
   quint64 phash;
+  bool silence = false;
 };
 
 struct VideoInfo
@@ -302,6 +324,85 @@ void fetch_frames(VideoInfo& video)
     save_frames_to_disk(video.frames, search_filepath);
   }
 }
+
+// SILENCE DETECTION //
+
+void mark_frame_silence(VideoInfo& video, double start, double end)
+{
+  auto get_frame_timestamp = [&video](const VideoFrameInfo& frame) {
+    return frame.pts * get_frame_delta(video);
+  };
+
+  auto within_silence = [&get_frame_timestamp, start, end](const VideoFrameInfo& frame) {
+    const double t = get_frame_timestamp(frame);
+    return t >= start && t < end;
+  };
+
+  auto it = std::lower_bound(video.frames.begin(),
+                             video.frames.end(),
+                             start,
+                             [&get_frame_timestamp](const VideoFrameInfo& e, double val) {
+                               return get_frame_timestamp(e) < val;
+                             });
+
+  for (; it != video.frames.end(); ++it)
+  {
+    if (within_silence(*it))
+    {
+      it->silence = true;
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
+void silencedetect(VideoInfo& video)
+{
+  constexpr const char* duration_threshold = "0.4";
+
+  QString output;
+  QStringList args;
+  args << "-nostats"
+       << "-hide_banner";
+  args << "-i" << video.filePath;
+  args << "-map"
+       << "0:1";
+  args << "-af" << QString("silencedetect=n=-35dB:d=%1").arg(duration_threshold);
+  args << "-f"
+       << "null"
+       << "-";
+  run_ffmpeg(args, &output);
+  //qDebug().noquote() << output;
+
+  qDebug() << "detecting silences...";
+
+  QStringList lines = output.split('\n');
+  lines.removeIf([](const QString& str) { return !str.contains("silencedetect"); });
+  Q_ASSERT(lines.size() % 2 == 0);
+
+  for (int i(0); i < lines.size(); i += 2)
+  {
+    QString line = lines.at(i);
+    int index = line.indexOf("silence_start:");
+    Q_ASSERT(index != -1);
+    QString text = line.mid(index + 14).simplified();
+    const double start = text.toDouble();
+
+    line = lines.at(i + 1);
+    index = line.indexOf("silence_duration:");
+    Q_ASSERT(index != -1);
+    text = line.mid(index + 17).simplified();
+    const double duration = text.toDouble();
+
+    qDebug() << "found silence from " << formatSeconds(start) << " to "
+             << formatSeconds(start + duration) << " (" << duration << "s)";
+    mark_frame_silence(video, start, start + duration);
+  }
+}
+
+// MISC //
 
 int phashDist(const VideoFrameInfo& a, const VideoFrameInfo& b)
 {
@@ -584,16 +685,6 @@ std::vector<OutputSegment> extract_segments(const VideoInfo& a, const VideoInfo&
   return result;
 }
 
-QString formatSeconds(double val)
-{
-  int minutes = int(val) / 60;
-  double seconds = int(val) % 60;
-  seconds += (val - int(val));
-
-  const char* fmtstr = seconds < 10 ? "%1:0%2" : "%1:%2";
-  return QString(fmtstr).arg(QString::number(minutes), QString::number(seconds));
-}
-
 QDebug operator<<(QDebug dbg, const OutputSegment& segment)
 {
   dbg.noquote().nospace() << (segment.pts) << " --> " << (segment.pts + segment.duration);
@@ -661,6 +752,8 @@ void digidub(VideoInfo& video,
 
   fetch_frames(video);
   fetch_frames(audioSource);
+
+  silencedetect(video);
 
   std::vector<OutputSegment> segments = extract_segments(video, audioSource);
   qDebug() << segments.size() << "segments";
