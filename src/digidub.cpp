@@ -18,6 +18,8 @@
 
 #include <iostream>
 
+constexpr const char* VERSION_STRING = "0.1";
+
 // FFMPEG helpers //
 
 void run_executable(const QString& name, const QStringList& args, QString* stdOut = nullptr)
@@ -860,6 +862,12 @@ int main(int argc, char *argv[])
   {
     std::cout << "digidub -a <main-video.mkv> -b <secondary-video.mkv> [-o <output.mkv>]"
               << std::endl;
+    return 0;
+  }
+
+  if (args.contains("-v") || args.contains("--version"))
+  {
+    std::cout << VERSION_STRING << std::endl;
     return 0;
   }
 
