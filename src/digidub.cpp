@@ -610,6 +610,7 @@ struct ProgramData
   VideoInfo firstVideo;
   VideoInfo secondVideo;
   QString outputPath;
+  bool dryRun = false;
 };
 
 static ProgramData gProgramData = {};
@@ -643,7 +644,10 @@ QString compute_output_path(const VideoInfo& video, const QString& userProvidedO
   return result;
 }
 
-void digidub(VideoInfo& video, VideoInfo& audioSource, const QString& userProvidedOutputPath)
+void digidub(VideoInfo& video,
+             VideoInfo& audioSource,
+             const QString& userProvidedOutputPath,
+             bool dryRun = false)
 {
   const QDir videodir = QFileInfo(video.filePath).dir();
 
@@ -663,6 +667,12 @@ void digidub(VideoInfo& video, VideoInfo& audioSource, const QString& userProvid
   for (const auto& s : segments)
   {
     qDebug() << s;
+  }
+
+  if (dryRun)
+  {
+    qApp->exit();
+    return;
   }
 
   QFile mylist{tempdir.filePath("list.txt")};
@@ -832,7 +842,10 @@ void main_proc()
     return qApp->exit(1);
   }
 
-  digidub(gProgramData.firstVideo, gProgramData.secondVideo, gProgramData.outputPath);
+  digidub(gProgramData.firstVideo,
+          gProgramData.secondVideo,
+          gProgramData.outputPath,
+          gProgramData.dryRun);
 }
 
 void set_video_arg(VideoInfo& video, const QString& arg)
@@ -886,6 +899,10 @@ int main(int argc, char *argv[])
     else if (arg == "-b")
     {
       set_video_arg(pd.secondVideo, args.at(++i));
+    }
+    else if (arg == "--dry-run")
+    {
+      pd.dryRun = true;
     }
     else
     {
