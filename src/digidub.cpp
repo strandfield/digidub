@@ -2535,6 +2535,167 @@ std::vector<OutputSegment> extract_segments_v2(const VideoInfo& a, const VideoIn
   return result;
 }
 
+namespace extract_v3 {
+
+size_t find_segment_end(const VideoInfo& video, size_t start)
+{
+  const size_t vend = get_number_of_frames(video);
+
+  if (video.frames.at(start).excluded)
+  {
+    while (start < vend && video.frames.at(start).excluded)
+      ++start;
+    return start;
+  }
+
+  size_t s = extract_v2::find_next_silence(video, start);
+  const size_t e = extract_v2::find_next_excluded(video, start);
+  if (e <= s)
+    return e;
+
+  size_t segend = s;
+  while (segend != vend)
+  {
+    const size_t scf = find_next_scframe(video, segend);
+    const size_t bf = find_next_blackframe(video, segend);
+    const size_t silence_end = extract_v2::find_silence_end(video, segend);
+
+    if (std::min(scf, bf) <= silence_end)
+    {
+      if (scf <= silence_end)
+      {
+        segend = scf;
+      }
+      else
+      {
+        segend = bf;
+      }
+
+      break;
+    }
+    else
+    {
+      s = extract_v2::find_next_silence(video, segend);
+      if (e <= s)
+        return e;
+
+      segend = s;
+    }
+  }
+
+  return segend;
+}
+
+} // namespace extract_v3
+
+std::vector<FrameSpan> extract_segments(const VideoInfo& video)
+{
+  using namespace extract_v3;
+
+  std::vector<FrameSpan> result;
+
+  size_t i = 0;
+  while (i < get_number_of_frames(video))
+  {
+    const size_t segment_start = i;
+    const size_t segment_end = find_segment_end(video, segment_start);
+    result.push_back(FrameSpan(video, segment_start, segment_end - segment_start));
+    i = segment_end;
+  }
+
+  return result;
+}
+
+std::vector<OutputSegment> compute_dub(const VideoInfo& a, const VideoInfo& b)
+{
+  using namespace extract_v2;
+
+  std::vector<OutputSegment> result;
+  int curpts = 0;
+
+  FrameSpan search_area{b, 0, b.frames.size()};
+
+  const std::vector<FrameSpan> segments = extract_segments(a);
+
+  // for (const FrameSpan& segment : segments)
+  // {
+  //   qDebug() << segment;
+  // }
+
+  for (const FrameSpan& segment : segments)
+  {
+    assert(segment.size() > 0);
+
+    if (segment.at(0).excluded)
+    {
+      continue;
+    }
+
+    std::pair<FrameSpan, FrameSpan> matchingspans = find_best_subspan_match(segment, search_area);
+    if (matchingspans.first.count == 0)
+    {
+      continue;
+    }
+
+    qDebug() << "M:" << matchingspans.first << "~" << matchingspans.second;
+
+    // on crée un segment pour rejoindre le match
+    if (a.frames.at(matchingspans.first.startOffset()).pts > curpts)
+    {
+      OutputSegment oseg;
+      oseg.pts = curpts;
+      oseg.duration = a.frames.at(matchingspans.first.startOffset()).pts - curpts;
+      oseg.input.src = 0;
+      // segment.input.speed = 1;
+      oseg.input.start = curpts * get_frame_delta(a);
+      oseg.input.end = (oseg.pts + oseg.duration) * get_frame_delta(a);
+      result.push_back(oseg);
+
+      curpts += oseg.duration;
+    }
+
+    if (matchingspans.first.size() > 0)
+    {
+      OutputSegment oseg;
+      oseg.pts = curpts;
+      oseg.duration = get_nth_frame_pts(a, matchingspans.first.endOffset()) - curpts;
+      oseg.input.src = 1;
+      oseg.input.start = b.frames.at(matchingspans.second.startOffset()).pts * get_frame_delta(b);
+      //  segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
+      oseg.input.end = get_nth_frame_pts(b, matchingspans.second.endOffset()) * get_frame_delta(b);
+      // segment.input.speed = (segment.input.end - segment.input.start)
+      //                       / (segment.duration * a.framedelta());
+      result.push_back(oseg);
+
+      curpts += oseg.duration;
+    }
+
+    search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
+  }
+
+  if (curpts < a.frames.back().pts)
+  {
+    const int duration = a.frames.back().pts + 1 - curpts;
+    const double secs = duration * get_frame_delta(a);
+    if (secs >= 0.250)
+    {
+      // on ajoute un segment pour terminer la video
+      OutputSegment segment;
+      segment.pts = curpts;
+      segment.duration = duration;
+      segment.input.src = 0;
+      //segment.input.speed = 1;
+      segment.input.start = curpts * get_frame_delta(a);
+      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
+      result.push_back(segment);
+
+      curpts += segment.duration;
+    }
+  }
+
+  return result;
+}
+
 QDebug operator<<(QDebug dbg, const OutputSegment& segment)
 {
   dbg.noquote().nospace() << (segment.pts) << " --> " << (segment.pts + segment.duration);
@@ -2623,7 +2784,7 @@ void digidub(VideoInfo& video,
   mark_excluded_frames(video, excludedSegments);
   unmark_silenced_frames(video, unsilencedSegments);
 
-  std::vector<OutputSegment> segments = extract_segments_v2(video, audioSource);
+  std::vector<OutputSegment> segments = compute_dub(video, audioSource);
   qDebug() << segments.size() << "segments";
   for (const auto& s : segments)
   {
