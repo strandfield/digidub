@@ -1126,7 +1126,6 @@ void merge_small_scenes(VideoInfo& video, size_t minSize)
 void mark_excluded_frames(VideoInfo& video, const std::vector<TimeWindow>& segments)
 {
   assert(video.frames.size() > 0);
-  // TODO: sort segments if they aren't sorted
 
   auto mark_excluded = [](VideoFrameInfo& frame) { frame.excluded = true; };
 
@@ -1136,10 +1135,9 @@ void mark_excluded_frames(VideoInfo& video, const std::vector<TimeWindow>& segme
   }
 }
 
-void unmark_silenced_frames(VideoInfo& video, const std::vector<TimeWindow>& segments)
+void prevent_breaks_at_frames(VideoInfo& video, const std::vector<TimeWindow>& segments)
 {
   assert(video.frames.size() > 0);
-  // TODO: sort segments if they aren't sorted
 
   auto f = [](VideoFrameInfo& frame) { frame.silence = false; };
 
@@ -2771,7 +2769,7 @@ struct ProgramData
   VideoInfo secondVideo;
   QString outputPath;
   std::vector<TimeWindow> excludedSegments;
-  std::vector<TimeWindow> unsilencedSegments;
+  std::vector<TimeWindow> noBreakSegments;
   std::vector<std::pair<TimeWindow, TimeWindow>> forcedMatches;
   bool dryRun = false;
 };
@@ -2811,7 +2809,7 @@ void digidub(VideoInfo& video,
              VideoInfo& audioSource,
              const QString& userProvidedOutputPath,
              const std::vector<TimeWindow>& excludedSegments,
-             const std::vector<TimeWindow>& unsilencedSegments,
+             const std::vector<TimeWindow>& noBreakSegments,
              const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches,
              bool dryRun = false)
 {
@@ -2845,7 +2843,7 @@ void digidub(VideoInfo& video,
   {
     mark_excluded_frames(video, {p.first});
   }
-  unmark_silenced_frames(video, unsilencedSegments);
+  prevent_breaks_at_frames(video, noBreakSegments);
 
   std::vector<OutputSegment> segments = compute_dub(video, audioSource, forcedMatches);
   qDebug() << segments.size() << "segments";
@@ -3068,7 +3066,7 @@ void main_proc()
             gProgramData.secondVideo,
             gProgramData.outputPath,
             gProgramData.excludedSegments,
-            gProgramData.unsilencedSegments,
+            gProgramData.noBreakSegments,
             gProgramData.forcedMatches,
             gProgramData.dryRun);
   }
@@ -3205,7 +3203,7 @@ void parse_forcematch_arg(std::vector<std::pair<TimeWindow, TimeWindow>>& output
     QStringList parts = arg.split('~');
     if (parts.size() != 2)
     {
-      throw std::runtime_error("bad format for excluded segment");
+      throw std::runtime_error("bad format for --force-match arg");
     }
 
     return std::pair(parts.front().simplified(), parts.back().simplified());
@@ -3234,9 +3232,9 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
     {
       parse_timespan_arg(pd.excludedSegments, args.at(++i));
     }
-    else if (arg == "--unsilence")
+    else if (arg == "--no-break")
     {
-      parse_timespan_arg(pd.unsilencedSegments, args.at(++i));
+      parse_timespan_arg(pd.noBreakSegments, args.at(++i));
     }
     else if (arg == "--force-match")
     {
