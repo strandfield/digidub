@@ -663,6 +663,33 @@ void silenceborders(std::vector<VideoFrameInfo>& frames, size_t n = 10)
   }
 }
 
+FrameSpan get_span(const VideoInfo& video, const TimeWindow& window)
+{
+  auto get_frame_timestamp = [&video](const VideoFrameInfo& frame) {
+    return frame.pts * get_frame_delta(video);
+  };
+
+  auto within_window = [&get_frame_timestamp, window](const VideoFrameInfo& frame) {
+    const double t = get_frame_timestamp(frame);
+    return window.contains(t);
+  };
+
+  auto begin = std::lower_bound(video.frames.begin(),
+                                video.frames.end(),
+                                window.start(),
+                                [&get_frame_timestamp](const VideoFrameInfo& e, double val) {
+                                  return get_frame_timestamp(e) < val;
+                                });
+
+  auto it = begin;
+  while (it != video.frames.end() && within_window(*it))
+    ++it;
+
+  size_t start_offset = std::distance(video.frames.begin(), begin);
+  size_t end_offset = std::distance(video.frames.begin(), it);
+  return FrameSpan(video, start_offset, end_offset - start_offset);
+}
+
 template<typename Fun>
 void mark_frames(VideoInfo& video, const TimeWindow& window, Fun&& fun)
 {
@@ -2535,6 +2562,197 @@ std::vector<OutputSegment> extract_segments_v2(const VideoInfo& a, const VideoIn
   return result;
 }
 
+namespace extract_v3 {
+
+size_t find_segment_end(const VideoInfo& video, size_t start)
+{
+  const size_t vend = get_number_of_frames(video);
+
+  if (video.frames.at(start).excluded)
+  {
+    while (start < vend && video.frames.at(start).excluded)
+      ++start;
+    return start;
+  }
+
+  size_t s = extract_v2::find_next_silence(video, start);
+  const size_t e = extract_v2::find_next_excluded(video, start);
+  if (e <= s)
+    return e;
+
+  size_t segend = s;
+  while (segend != vend)
+  {
+    const size_t scf = find_next_scframe(video, segend);
+    const size_t bf = find_next_blackframe(video, segend);
+    const size_t silence_end = extract_v2::find_silence_end(video, segend);
+
+    if (std::min(scf, bf) <= silence_end)
+    {
+      if (scf <= silence_end)
+      {
+        segend = scf;
+      }
+      else
+      {
+        segend = bf;
+      }
+
+      break;
+    }
+    else
+    {
+      s = extract_v2::find_next_silence(video, segend);
+      if (e <= s)
+        return e;
+
+      segend = s;
+    }
+  }
+
+  return segend;
+}
+
+} // namespace extract_v3
+
+std::vector<FrameSpan> extract_segments(const VideoInfo& video)
+{
+  using namespace extract_v3;
+
+  std::vector<FrameSpan> result;
+
+  size_t i = 0;
+  while (i < get_number_of_frames(video))
+  {
+    const size_t segment_start = i;
+    const size_t segment_end = find_segment_end(video, segment_start);
+    result.push_back(FrameSpan(video, segment_start, segment_end - segment_start));
+    i = segment_end;
+  }
+
+  return result;
+}
+
+std::optional<TimeWindow> find_forced_match(
+    const VideoInfo& a,
+    size_t frameIndex,
+    const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches)
+{
+  double t = get_frame_timestamp(a, frameIndex);
+  for (const auto& p : forcedMatches)
+  {
+    if (p.first.contains(t))
+    {
+      return p.second;
+    }
+  }
+
+  return std::nullopt;
+}
+
+std::vector<OutputSegment> compute_dub(
+    const VideoInfo& a,
+    const VideoInfo& b,
+    const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches)
+{
+  using namespace extract_v2;
+
+  std::vector<OutputSegment> result;
+  int curpts = 0;
+
+  FrameSpan search_area{b, 0, b.frames.size()};
+
+  const std::vector<FrameSpan> segments = extract_segments(a);
+
+  // for (const FrameSpan& segment : segments)
+  // {
+  //   qDebug() << segment;
+  // }
+
+  for (const FrameSpan& segment : segments)
+  {
+    assert(segment.size() > 0);
+
+    std::pair<FrameSpan, FrameSpan> matchingspans;
+
+    if (!segment.at(0).excluded)
+    {
+      matchingspans = find_best_subspan_match(segment, search_area);
+    }
+    else
+    {
+      std::optional<TimeWindow> fmatch = find_forced_match(a, segment.startOffset(), forcedMatches);
+      if (fmatch.has_value())
+      {
+        matchingspans.first = segment;
+        matchingspans.second = get_span(b, *fmatch);
+      }
+    }
+
+    if (matchingspans.first.count == 0)
+    {
+      continue;
+    }
+
+    qDebug() << "M:" << matchingspans.first << "~" << matchingspans.second;
+
+    // on crée un segment pour rejoindre le match
+    if (a.frames.at(matchingspans.first.startOffset()).pts > curpts)
+    {
+      OutputSegment oseg;
+      oseg.pts = curpts;
+      oseg.duration = a.frames.at(matchingspans.first.startOffset()).pts - curpts;
+      oseg.input.src = 0;
+      // segment.input.speed = 1;
+      oseg.input.start = curpts * get_frame_delta(a);
+      oseg.input.end = (oseg.pts + oseg.duration) * get_frame_delta(a);
+      result.push_back(oseg);
+
+      curpts += oseg.duration;
+    }
+
+    if (matchingspans.first.size() > 0)
+    {
+      OutputSegment oseg;
+      oseg.pts = curpts;
+      oseg.duration = get_nth_frame_pts(a, matchingspans.first.endOffset()) - curpts;
+      oseg.input.src = 1;
+      oseg.input.start = b.frames.at(matchingspans.second.startOffset()).pts * get_frame_delta(b);
+      //  segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
+      oseg.input.end = get_nth_frame_pts(b, matchingspans.second.endOffset()) * get_frame_delta(b);
+      // segment.input.speed = (segment.input.end - segment.input.start)
+      //                       / (segment.duration * a.framedelta());
+      result.push_back(oseg);
+
+      curpts += oseg.duration;
+    }
+
+    search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
+  }
+
+  if (curpts < a.frames.back().pts)
+  {
+    const int duration = a.frames.back().pts + 1 - curpts;
+    const double secs = duration * get_frame_delta(a);
+    if (secs >= 0.250)
+    {
+      // on ajoute un segment pour terminer la video
+      OutputSegment segment;
+      segment.pts = curpts;
+      segment.duration = duration;
+      segment.input.src = 0;
+      //segment.input.speed = 1;
+      segment.input.start = curpts * get_frame_delta(a);
+      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
+      result.push_back(segment);
+
+      curpts += segment.duration;
+    }
+  }
+
+  return result;
+}
+
 QDebug operator<<(QDebug dbg, const OutputSegment& segment)
 {
   dbg.noquote().nospace() << (segment.pts) << " --> " << (segment.pts + segment.duration);
@@ -2554,6 +2772,7 @@ struct ProgramData
   QString outputPath;
   std::vector<TimeWindow> excludedSegments;
   std::vector<TimeWindow> unsilencedSegments;
+  std::vector<std::pair<TimeWindow, TimeWindow>> forcedMatches;
   bool dryRun = false;
 };
 
@@ -2593,6 +2812,7 @@ void digidub(VideoInfo& video,
              const QString& userProvidedOutputPath,
              const std::vector<TimeWindow>& excludedSegments,
              const std::vector<TimeWindow>& unsilencedSegments,
+             const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches,
              bool dryRun = false)
 {
   const QDir videodir = QFileInfo(video.filePath).dir();
@@ -2621,9 +2841,13 @@ void digidub(VideoInfo& video,
   //merge_small_scenes(audioSource, 7);
 
   mark_excluded_frames(video, excludedSegments);
+  for (const auto& p : forcedMatches)
+  {
+    mark_excluded_frames(video, {p.first});
+  }
   unmark_silenced_frames(video, unsilencedSegments);
 
-  std::vector<OutputSegment> segments = extract_segments_v2(video, audioSource);
+  std::vector<OutputSegment> segments = compute_dub(video, audioSource, forcedMatches);
   qDebug() << segments.size() << "segments";
   for (const auto& s : segments)
   {
@@ -2845,6 +3069,7 @@ void main_proc()
             gProgramData.outputPath,
             gProgramData.excludedSegments,
             gProgramData.unsilencedSegments,
+            gProgramData.forcedMatches,
             gProgramData.dryRun);
   }
   else if (gProgramData.command == "silencedetect")
@@ -2952,10 +3177,32 @@ double parse_timestamp(const QString& text)
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-void parse_timespan_arg(std::vector<TimeWindow>& output, const QString& arg)
+TimeWindow parse_timespan(const QString& arg)
 {
   const std::pair<QString, QString> start_end = [&arg]() {
     QStringList parts = arg.split('-');
+    if (parts.size() != 2)
+    {
+      throw std::runtime_error("bad format for timewindow");
+    }
+
+    return std::pair(parts.front().simplified(), parts.back().simplified());
+  }();
+
+  const double start = parse_timestamp(start_end.first);
+  const double end = parse_timestamp(start_end.second);
+  return TimeWindow::fromStartAndEnd(start, end);
+}
+
+void parse_timespan_arg(std::vector<TimeWindow>& output, const QString& arg)
+{
+  output.push_back(parse_timespan(arg));
+}
+
+void parse_forcematch_arg(std::vector<std::pair<TimeWindow, TimeWindow>>& output, const QString& arg)
+{
+  const std::pair<QString, QString> p = [&arg]() {
+    QStringList parts = arg.split('~');
     if (parts.size() != 2)
     {
       throw std::runtime_error("bad format for excluded segment");
@@ -2964,9 +3211,9 @@ void parse_timespan_arg(std::vector<TimeWindow>& output, const QString& arg)
     return std::pair(parts.front().simplified(), parts.back().simplified());
   }();
 
-  const double start = parse_timestamp(start_end.first);
-  const double end = parse_timestamp(start_end.second);
-  output.push_back(TimeWindow::fromStartAndEnd(start, end));
+  TimeWindow first = parse_timespan(p.first);
+  TimeWindow second = parse_timespan(p.second);
+  output.push_back(std::pair(first, second));
 }
 
 void parse_dub_args(ProgramData& pd, const QStringList& args)
@@ -2990,6 +3237,10 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
     else if (arg == "--unsilence")
     {
       parse_timespan_arg(pd.unsilencedSegments, args.at(++i));
+    }
+    else if (arg == "--force-match")
+    {
+      parse_forcematch_arg(pd.forcedMatches, args.at(++i));
     }
     else if (arg == "--dry-run")
     {
