@@ -24,6 +24,9 @@
 constexpr const char* VERSION_STRING = "0.2";
 
 bool debugmatches = false;
+int frame_unmatch_threshold = 21;
+int frame_rematch_threshold = 16;
+double area_match_threshold = 20;
 
 // DEBUG/PRINT HELPERS //
 
@@ -1286,8 +1289,6 @@ std::vector<FrameSpan> split_at_scframes(const FrameSpan& span)
   return result;
 }
 
-constexpr size_t good_match_threshold = 20;
-
 inline FrameSpan merge(FrameSpan a, FrameSpan b)
 {
   if (b.startOffset() < a.startOffset())
@@ -1334,7 +1335,7 @@ std::pair<std::vector<FrameSpan>::const_iterator, FrameSpan> extend_match(
     // then we try to find a match:
     MatchingArea m = find_best_matching_area_ex(current_pattern, search_area);
 
-    if (m.score > good_match_threshold) // no good match, stop here
+    if (m.score > area_match_threshold) // no good match, stop here
     {
       break;
     }
@@ -1467,7 +1468,7 @@ bool likely_same_scene(FrameSpan a, FrameSpan b)
     std::swap(a, b);
   }
 
-  return find_best_matching_area_ex(a, b).score < 20;
+  return find_best_matching_area_ex(a, b).score <= area_match_threshold;
 }
 
 size_t number_of_frames_in_range(std::vector<FrameSpan>::const_iterator begin,
@@ -1480,8 +1481,13 @@ size_t number_of_frames_in_range(std::vector<FrameSpan>::const_iterator begin,
 
 std::optional<std::pair<size_t, size_t>> find_best_match(const FrameSpan& a,
                                                          const FrameSpan& b,
-                                                         int threshold = 20)
+                                                         int matchThreshold = -1)
 {
+  if (matchThreshold < 0)
+  {
+    matchThreshold = frame_rematch_threshold;
+  }
+
   int bestd = 64;
   size_t bestx = -1;
   size_t besty = -1;
@@ -1508,7 +1514,7 @@ std::optional<std::pair<size_t, size_t>> find_best_match(const FrameSpan& a,
     }
   }
 
-  if (bestd < threshold)
+  if (bestd <= matchThreshold)
   {
     return std::pair(a.startOffset() + bestx, b.startOffset() + besty);
   }
@@ -1524,7 +1530,6 @@ std::pair<size_t, size_t> find_match_end(const VideoInfo& a,
                                          size_t i_end,
                                          size_t j_end)
 {
-  constexpr int diff_threshold = 20;
   double jreal = j;
 
   while (i + 1 < i_end && std::round(jreal + speed) < j_end)
@@ -1533,7 +1538,7 @@ std::pair<size_t, size_t> find_match_end(const VideoInfo& a,
     size_t next_frame_b = std::round(jreal + speed);
     const int diff = phashDist(a.frames.at(next_frame_a), b.frames.at(next_frame_b));
 
-    if (diff <= diff_threshold)
+    if (diff < frame_unmatch_threshold)
     {
       i = next_frame_a;
       j = next_frame_b;
@@ -1546,8 +1551,7 @@ std::pair<size_t, size_t> find_match_end(const VideoInfo& a,
     auto span1 = FrameSpan(a, next_frame_a, i_end - next_frame_a).left(4);
     auto span2 = FrameSpan(b, next_frame_b, j_end - next_frame_b).left(4);
 
-    constexpr int threshold = 16;
-    std::optional<std::pair<size_t, size_t>> search_match = find_best_match(span1, span2, threshold);
+    std::optional<std::pair<size_t, size_t>> search_match = find_best_match(span1, span2);
 
     if (!search_match)
     {
@@ -1564,7 +1568,7 @@ std::pair<size_t, size_t> find_match_end(const VideoInfo& a,
     // we are just missing one frame from video A.
     // let's see if we can include it in the match
     const int diff = phashDist(a.frames.at(i + 1), b.frames.at(j));
-    if (diff <= diff_threshold)
+    if (diff < frame_unmatch_threshold)
     {
       ++i;
     }
@@ -1581,7 +1585,6 @@ std::pair<size_t, size_t> find_match_end_backward(const VideoInfo& a,
                                                   size_t i_min,
                                                   size_t j_min)
 {
-  constexpr int diff_threshold = 20;
   double jreal = j;
 
   while (i > i_min && std::round(jreal - speed) >= j_min)
@@ -1591,7 +1594,7 @@ std::pair<size_t, size_t> find_match_end_backward(const VideoInfo& a,
 
     const int diff = phashDist(a.frames.at(prev_frame_a), b.frames.at(prev_frame_b));
 
-    if (diff <= diff_threshold)
+    if (diff < frame_unmatch_threshold)
     {
       i = prev_frame_a;
       j = prev_frame_b;
@@ -1604,8 +1607,7 @@ std::pair<size_t, size_t> find_match_end_backward(const VideoInfo& a,
     auto span1 = FrameSpan(a, i_min, i - i_min).right(4);
     auto span2 = FrameSpan(b, j_min, j - j_min).right(4);
 
-    constexpr int threshold = 16;
-    std::optional<std::pair<size_t, size_t>> search_match = find_best_match(span1, span2, threshold);
+    std::optional<std::pair<size_t, size_t>> search_match = find_best_match(span1, span2);
 
     if (!search_match)
     {
@@ -1622,7 +1624,7 @@ std::pair<size_t, size_t> find_match_end_backward(const VideoInfo& a,
     // we are just missing one frame from video A.
     // let's see if we can include it in the match
     const int diff = phashDist(a.frames.at(i_min), b.frames.at(j));
-    if (diff <= diff_threshold)
+    if (diff < frame_unmatch_threshold)
     {
       i = i_min;
     }
@@ -1817,7 +1819,7 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
 
     MatchingArea local_match = find_best_matching_area_ex(first_to_second_scene_transition,
                                                           basematch.left(search_area_size));
-    assert(local_match.score <= 20);
+    assert(local_match.score <= area_match_threshold);
 
     vid1_first_sc = local_match.pattern.startOffset() + local_match.pattern.size() / 2;
     vid2_first_sc = local_match.match.startOffset() + local_match.match.size() / 2;
@@ -1832,7 +1834,7 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
     const size_t search_area_size = number_of_frames_in_range(std::prev(end, 3), end);
     MatchingArea local_match = find_best_matching_area_ex(penultimate_to_last_scene_transition,
                                                           basematch.right(search_area_size));
-    assert(local_match.score <= 20);
+    assert(local_match.score <= area_match_threshold);
 
     vid1_last_sc = local_match.pattern.startOffset() + local_match.pattern.size() / 2;
     vid2_last_sc = local_match.match.startOffset() + local_match.match.size() / 2;
@@ -1940,7 +1942,7 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
       m = find_best_matching_area_ex(*it, searchArea);
     }
 
-    if (m.score > good_match_threshold)
+    if (m.score > area_match_threshold)
     {
       if (debugmatches)
       {
