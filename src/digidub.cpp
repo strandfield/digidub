@@ -1149,192 +1149,7 @@ void prevent_breaks_at_frames(VideoInfo& video, const std::vector<TimeWindow>& s
 
 //// END - VIDEO /////
 
-/// SEGMENT MATCHING ///
-
-struct SegmentMatch
-{
-  FrameSpan first;
-  FrameSpan second;
-};
-
-// struct MatchChain
-// {
-//   SegmentMatch match;
-//   int score = 0;
-//   std::shared_ptr<MatchChain> prev;
-// };
-
 /// SEGMENT EXTRACTION ///
-
-class SearchWindow
-{
-public:
-  const VideoInfo* video;
-  size_t firstFrame;
-  size_t nbFrames;
-  double duration;
-
-public:
-  SearchWindow(const VideoInfo& iVideo, size_t iFirstFrame = 0, double iDuration = 2)
-      : video(&iVideo)
-      , firstFrame(iFirstFrame)
-      , nbFrames(1)
-      , duration(iDuration)
-  {
-    reset(iFirstFrame);
-  }
-
-  void reset(size_t iFirstFrame)
-  {
-    const VideoInfo& v = *video;
-    firstFrame = iFirstFrame;
-    nbFrames = 1;
-
-    const double d = duration;
-    duration = 0;
-    increase(d);
-  }
-
-  void reset(size_t iFirstFrame, double iDuration)
-  {
-    duration = iDuration;
-    reset(iFirstFrame);
-  }
-
-  void reset(double iDuration)
-  {
-    nbFrames = 1;
-    duration = 0;
-    increase(iDuration);
-  }
-
-  bool increase(double d)
-  {
-    const VideoInfo& v = *video;
-    const size_t cur_nb_frames = nbFrames;
-    duration += d;
-
-    int max_pts = get_nth_frame_pts(v, firstFrame) + duration / get_frame_delta(v);
-    while (firstFrame + nbFrames < get_number_of_frames(v))
-    {
-      if (get_nth_frame_pts(v, nbFrames + firstFrame) < max_pts)
-      {
-        ++nbFrames;
-      }
-      else
-      {
-        break;
-      }
-    }
-
-    return nbFrames > cur_nb_frames;
-  }
-};
-
-class SearchWindows
-{
-public:
-  SearchWindow a;
-  SearchWindow b;
-
-public:
-  SearchWindows(const VideoInfo& firstVideo, size_t i, const VideoInfo& secondVideo, size_t j)
-      : a(firstVideo, i)
-      , b(secondVideo, j)
-  {}
-
-  SearchWindows(
-      double d, const VideoInfo& firstVideo, size_t i, const VideoInfo& secondVideo, size_t j)
-      : a(firstVideo, i, d)
-      , b(secondVideo, j, d)
-  {}
-
-  bool increase(double d)
-  {
-    bool ok = false;
-
-    if (a.increase(d))
-    {
-      ok = true;
-    }
-    if (b.increase(d))
-    {
-      ok = true;
-    }
-
-    return ok;
-  }
-};
-
-std::optional<std::pair<size_t, size_t>> find_match(SearchWindows windows, int threshold = 4)
-{
-  int bestd = 64;
-  size_t bestx = -1;
-  size_t besty = -1;
-
-  const size_t i = windows.a.firstFrame;
-  const size_t j = windows.b.firstFrame;
-
-  for (size_t x(0); x < windows.a.nbFrames; ++x)
-  {
-    for (size_t y(0); y < windows.b.nbFrames; ++y)
-    {
-      int d = phashDist(windows.a.video->frames.at(i + x), windows.b.video->frames.at(j + y));
-      if (d == 0)
-      {
-        return std::pair(i + x, j + y);
-      }
-      else if (d < bestd)
-      {
-        bestd = d;
-        bestx = x;
-        besty = y;
-      }
-    }
-  }
-
-  if (bestd < threshold)
-  {
-    return std::pair(i + bestx, j + besty);
-  }
-
-  return std::nullopt;
-}
-
-std::pair<size_t, size_t> find_match_end(const VideoInfo& a, size_t i, const VideoInfo& b, size_t j)
-{
-  constexpr int diff_threshold = 24;
-
-  while (i + 1 < get_number_of_frames(a) && j + 1 < get_number_of_frames(b))
-  {
-    const int diff = phashDist(a.frames.at(i + 1), b.frames.at(j + 1));
-
-    if (diff <= diff_threshold)
-    {
-      i = i + 1;
-      j = j + 1;
-      continue;
-    }
-
-    // frames i+1 and j+1 do not really match.
-    // lets see if we can find a closer match nearby
-
-    SearchWindows windows{0.250, a, i + 1, b, j + 1};
-
-    constexpr int threshold = 20;
-    std::optional<std::pair<size_t, size_t>> search_match = find_match(windows, threshold);
-
-    if (!search_match)
-    {
-      // frames i,j are the last one matching
-      break;
-    }
-
-    std::tie(i, j) = *search_match;
-  }
-
-  return std::pair(i + 1, j + 1);
-}
 
 struct InputSegment
 {
@@ -1349,96 +1164,6 @@ struct OutputSegment
   int duration;
   InputSegment input;
 };
-
-std::vector<OutputSegment> extract_segments(const VideoInfo& a, const VideoInfo& b)
-{
-  size_t i = 0;
-  size_t j = 0;
-
-  std::vector<OutputSegment> result;
-
-  int curpts = 0;
-
-  while (i < get_number_of_frames(a))
-  {
-    SearchWindows search_windows{a, i, b, j};
-    std::optional<std::pair<size_t, size_t>> match = find_match(search_windows);
-
-    while (!match)
-    {
-      if (!search_windows.increase(2.0))
-      {
-        break;
-      }
-      match = find_match(search_windows);
-    }
-
-    if (!match)
-    {
-      // on a pas trouvé de match, donc on ajoute un segment pour terminer la video
-
-      OutputSegment segment;
-      segment.pts = curpts;
-      segment.duration = a.frames.back().pts + 1 - curpts;
-      segment.input.src = 0;
-      //segment.input.speed = 1;
-      segment.input.start = curpts * get_frame_delta(a);
-      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
-      result.push_back(segment);
-
-      curpts += segment.duration;
-      i = get_number_of_frames(a);
-      break;
-    }
-
-    // on crée un segment pour rejoindre le match
-    if (a.frames.at(match->first).pts > curpts)
-    {
-      OutputSegment segment;
-      segment.pts = curpts;
-      segment.duration = a.frames.at(match->first).pts - curpts;
-      segment.input.src = 0;
-      // segment.input.speed = 1;
-      segment.input.start = curpts * get_frame_delta(a);
-      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
-      result.push_back(segment);
-
-      curpts += segment.duration;
-    }
-
-    i = match->first;
-    j = match->second;
-
-    auto [iend, jend] = find_match_end(a, i, b, j);
-
-    qDebug().nospace() << "New match [" << a.frames.at(i).pts << "," << b.frames.at(j).pts
-                       << "] -> [" << get_nth_frame_pts(a, iend) << ", "
-                       << get_nth_frame_pts(b, jend) << "]";
-
-    assert(iend > i);
-    if (iend > i)
-    {
-      OutputSegment segment;
-      segment.pts = curpts;
-      segment.duration = get_nth_frame_pts(a, iend) - curpts;
-      segment.input.src = 1;
-      segment.input.start = b.frames.at(j).pts * get_frame_delta(b);
-      segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
-      // segment.input.speed = (segment.input.end - segment.input.start)
-      //                       / (segment.duration * a.framedelta());
-      result.push_back(segment);
-
-      curpts += segment.duration;
-    }
-
-    i = iend;
-    j = jend;
-  }
-
-  return result;
-}
-
-namespace extract_v2 {
 
 size_t find_silence_end(const VideoInfo& video, size_t i)
 {
@@ -1477,58 +1202,6 @@ size_t find_next_excluded(const VideoInfo& video, size_t from = 0)
   }
 
   return i;
-}
-
-size_t find_segment_start(const VideoInfo& video, size_t from)
-{
-  const size_t vend = get_number_of_frames(video);
-
-  while (from < vend && video.frames.at(from).excluded)
-    ++from;
-
-  return from;
-}
-
-size_t find_segment_end(const VideoInfo& video, size_t start)
-{
-  const size_t vend = get_number_of_frames(video);
-
-  size_t s = find_next_silence(video, start);
-  const size_t e = find_next_excluded(video, start);
-  if (e <= s)
-    return e;
-
-  size_t segend = s;
-  while (segend != vend)
-  {
-    const size_t scf = find_next_scframe(video, segend);
-    const size_t bf = find_next_blackframe(video, segend);
-    const size_t silence_end = find_silence_end(video, segend);
-
-    if (std::min(scf, bf) <= silence_end)
-    {
-      if (scf <= silence_end)
-      {
-        segend = scf;
-      }
-      else
-      {
-        segend = bf;
-      }
-
-      break;
-    }
-    else
-    {
-      s = find_next_silence(video, segend);
-      if (e <= s)
-        return e;
-
-      segend = s;
-    }
-  }
-
-  return segend;
 }
 
 struct MatchingArea
@@ -1591,72 +1264,6 @@ FrameSpan find_best_matching_area(const FrameSpan& pattern, const FrameSpan& sea
   auto result = find_best_matching_area_ex(pattern, searchArea);
   qDebug() << result.score << result.pattern << result.match;
   return result.match;
-}
-
-void crop_match_left(FrameSpan& a, FrameSpan& b, int threshold = 6)
-{
-  size_t i = 0;
-  while (i < a.size())
-  {
-    const int d = phashDist(a.at(i), b.at(i));
-    if (d < threshold)
-    {
-      break;
-    }
-    else
-    {
-      ++i;
-    }
-  }
-
-  if (i * get_frame_delta(*a.video) > 0.3)
-  {
-    a.first += i;
-    b.first += i;
-    a.count -= i;
-    b.count -= i;
-  }
-}
-
-// TODO: revoir crop_match_right pour mieux gérer les fade-out, c.f. ep39@15:20
-void crop_match_right(FrameSpan& a, FrameSpan& b, int threshold = 6)
-{
-  size_t i = 0;
-  while (i < a.size())
-  {
-    const int d = phashDist(a.at(a.size() - 1 - i), b.at(b.size() - 1 - i));
-
-    if (d < threshold)
-    {
-      break;
-    }
-    else
-    {
-      ++i;
-    }
-  }
-
-  if (i * get_frame_delta(*a.video) > 0.3)
-  {
-    a.count -= i;
-    b.count -= i;
-  }
-}
-
-void reduce_to_best_match(FrameSpan& a, FrameSpan& b, const int threshold = 6)
-{
-  // TODO: we need to change that if we want to handle scaling.
-  assert(a.size() == b.size());
-
-  // crop at the beginning
-  crop_match_left(a, b, threshold);
-
-  // crop at the end
-  crop_match_right(a, b, threshold);
-
-  // qDebug() << "reduced:" << a << b;
-
-  assert(a.size() == b.size());
 }
 
 std::vector<FrameSpan> split_at_scframes(const FrameSpan& span)
@@ -1784,51 +1391,6 @@ std::pair<std::vector<FrameSpan>::const_iterator, FrameSpan> extend_match(
     ++it;
   }
 
-  // // on essaye de corriger le problème vers 16:50,eng, 17:34,fre
-  // if (it != ikframes_begin)
-  // {
-  //   // make sure the match does not go too far
-  //   const FrameSpan& last_matching_pattern = *std::prev(it);
-  //   // if (last_matching_pattern.startOffset() == 25313)
-  //   // {
-  //   //   __debugbreak();
-  //   // }
-  //   const FrameSpan& penultimate_matching_pattern = *std::prev(it, 2);
-  //   const FrameSpan extended_pattern = merge(penultimate_matching_pattern, last_matching_pattern);
-  //   FrameSpan search_area = prev_match.second;
-  //   search_area.widenLeft(penultimate_matching_pattern.size());
-  //   search_area.widenLeft(std::max<size_t>(penultimate_matching_pattern.size() / 20, 3));
-  //   MatchingArea m = find_best_matching_area_ex(extended_pattern, search_area);
-  //   m.match.trimLeft(penultimate_matching_pattern.size());
-  //   if (m.match.startOffset() > prev_match.second.startOffset())
-  //   {
-  //     __debugbreak();
-  //   }
-  //   // prev_match.second = m.match;
-  // }
-
-  // // extend to next keyframe if it is close
-  // {
-  //   // TODO: faire un lookahead et regarder si les frames correspondent ?
-
-  //   const VideoInfo& second_video = *prev_match.second.video;
-  //   // const size_t lookahead = it != ikframes_end ? 12 : 18;
-  //   const size_t lookahead = 12;
-  //   for (size_t i(0); i < lookahead; ++i)
-  //   {
-  //     if (is_keyframe(second_video, prev_match.second.endOffset() + i, 24))
-  //     {
-  //       if (i > 0)
-  //       {
-  //         qDebug() << "    extending segment " << prev_match.second << " by " << i << " frames, to "
-  //                  << (prev_match.second.endOffset() + i);
-  //       }
-  //       prev_match.second.count += i;
-  //       break;
-  //     }
-  //   }
-  // }
-
   return std::pair(it, prev_match.second);
 }
 
@@ -1896,23 +1458,6 @@ bool ends_with_black_frames(const FrameSpan& span)
   }
 
   return false;
-}
-
-FrameSpan extract_scene_from_frame(const VideoInfo& video, size_t frameIndex)
-{
-  size_t first_frame = frameIndex;
-  while (first_frame > 0 && !is_sc_frame_safe(video, first_frame))
-  {
-    --first_frame;
-  }
-
-  size_t next_keyframe = frameIndex + 1;
-  while (!is_sc_frame_safe(video, next_keyframe))
-  {
-    ++next_keyframe;
-  }
-
-  return FrameSpan(video, first_frame, next_keyframe - first_frame);
 }
 
 bool likely_same_scene(FrameSpan a, FrameSpan b)
@@ -2411,27 +1956,6 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
       qDebug() << " >" << m.pattern << " ~ " << m.match;
     }
 
-    // // move back to prev keyframe if close
-    // if (m.match.first > 12)
-    // {
-    //   const VideoInfo& second_video = *m.match.video;
-    //   for (size_t i(0); i < 12; ++i)
-    //   {
-    //     if (is_keyframe(second_video, m.match.first - i, 24))
-    //     {
-    //       if (i > 0)
-    //       {
-    //         qDebug() << "    moving segment back to " << m.match << " by " << i << " frames, to "
-    //                  << (m.match.startOffset() - i);
-
-    //         m.match.first -= i;
-    //       }
-    //       break;
-    //     }
-    //   }
-    // }
-    // crop_match_left(m.pattern, m.match, 16);
-
     auto [end_it, last_match_from_sa] = extend_match(m,
                                                      std::next(it),
                                                      patspans.end(),
@@ -2453,8 +1977,6 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
       qDebug() << "  >>>" << m.pattern << " ~ " << m.match;
     }
 
-    // crop_match_right(m.pattern, m.match, 16);
-
     if (m.pattern.count > result.first.count)
     {
       // if (result.first.count > 0)
@@ -2472,96 +1994,6 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
   return result;
 }
 
-} // namespace extract_v2
-
-std::vector<OutputSegment> extract_segments_v2(const VideoInfo& a, const VideoInfo& b)
-{
-  using namespace extract_v2;
-
-  std::vector<OutputSegment> result;
-  int curpts = 0;
-
-  size_t i = 0;
-  FrameSpan search_area{b, 0, b.frames.size()};
-
-  while (i < get_number_of_frames(a))
-  {
-    const size_t segment_start = find_segment_start(a, i);
-    const size_t segment_end = find_segment_end(a, segment_start);
-
-    const FrameSpan main_video_segment{a, segment_start, segment_end - segment_start};
-
-    std::pair<FrameSpan, FrameSpan> matchingspans = find_best_subspan_match(main_video_segment,
-                                                                            search_area);
-    if (matchingspans.first.count == 0)
-    {
-      i = segment_end;
-      continue;
-    }
-
-    qDebug() << "M:" << matchingspans.first << "~" << matchingspans.second;
-
-    // on crée un segment pour rejoindre le match
-    if (a.frames.at(matchingspans.first.startOffset()).pts > curpts)
-    {
-      OutputSegment oseg;
-      oseg.pts = curpts;
-      oseg.duration = a.frames.at(matchingspans.first.startOffset()).pts - curpts;
-      oseg.input.src = 0;
-      // segment.input.speed = 1;
-      oseg.input.start = curpts * get_frame_delta(a);
-      oseg.input.end = (oseg.pts + oseg.duration) * get_frame_delta(a);
-      result.push_back(oseg);
-
-      curpts += oseg.duration;
-    }
-
-    if (matchingspans.first.size() > 0)
-    {
-      OutputSegment oseg;
-      oseg.pts = curpts;
-      oseg.duration = get_nth_frame_pts(a, matchingspans.first.endOffset()) - curpts;
-      oseg.input.src = 1;
-      oseg.input.start = b.frames.at(matchingspans.second.startOffset()).pts * get_frame_delta(b);
-      //  segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
-      oseg.input.end = get_nth_frame_pts(b, matchingspans.second.endOffset()) * get_frame_delta(b);
-      // segment.input.speed = (segment.input.end - segment.input.start)
-      //                       / (segment.duration * a.framedelta());
-      result.push_back(oseg);
-
-      curpts += oseg.duration;
-    }
-
-    i = segment_end;
-    search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
-    //search_area = FrameSpan(b, matchingspans.second.startOffset(), -1);
-  }
-
-  if (curpts < a.frames.back().pts)
-  {
-    const int duration = a.frames.back().pts + 1 - curpts;
-    const double secs = duration * get_frame_delta(a);
-    if (secs >= 0.250)
-    {
-      // on ajoute un segment pour terminer la video
-      OutputSegment segment;
-      segment.pts = curpts;
-      segment.duration = duration;
-      segment.input.src = 0;
-      //segment.input.speed = 1;
-      segment.input.start = curpts * get_frame_delta(a);
-      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
-      result.push_back(segment);
-
-      curpts += segment.duration;
-    }
-  }
-
-  return result;
-}
-
-namespace extract_v3 {
-
 size_t find_segment_end(const VideoInfo& video, size_t start)
 {
   const size_t vend = get_number_of_frames(video);
@@ -2573,8 +2005,8 @@ size_t find_segment_end(const VideoInfo& video, size_t start)
     return start;
   }
 
-  size_t s = extract_v2::find_next_silence(video, start);
-  const size_t e = extract_v2::find_next_excluded(video, start);
+  size_t s = find_next_silence(video, start);
+  const size_t e = find_next_excluded(video, start);
   if (e <= s)
     return e;
 
@@ -2583,7 +2015,7 @@ size_t find_segment_end(const VideoInfo& video, size_t start)
   {
     const size_t scf = find_next_scframe(video, segend);
     const size_t bf = find_next_blackframe(video, segend);
-    const size_t silence_end = extract_v2::find_silence_end(video, segend);
+    const size_t silence_end = find_silence_end(video, segend);
 
     if (std::min(scf, bf) <= silence_end)
     {
@@ -2600,7 +2032,7 @@ size_t find_segment_end(const VideoInfo& video, size_t start)
     }
     else
     {
-      s = extract_v2::find_next_silence(video, segend);
+      s = find_next_silence(video, segend);
       if (e <= s)
         return e;
 
@@ -2611,12 +2043,8 @@ size_t find_segment_end(const VideoInfo& video, size_t start)
   return segend;
 }
 
-} // namespace extract_v3
-
 std::vector<FrameSpan> extract_segments(const VideoInfo& video)
 {
-  using namespace extract_v3;
-
   std::vector<FrameSpan> result;
 
   size_t i = 0;
@@ -2653,8 +2081,6 @@ std::vector<OutputSegment> compute_dub(
     const VideoInfo& b,
     const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches)
 {
-  using namespace extract_v2;
-
   std::vector<OutputSegment> result;
   int curpts = 0;
 
