@@ -21,7 +21,7 @@
 #include <iterator>
 #include <optional>
 
-constexpr const char* VERSION_STRING = "0.1";
+constexpr const char* VERSION_STRING = "0.2";
 
 bool debugmatches = false;
 
