@@ -131,6 +131,7 @@ struct VideoFrameInfo
   bool black = false;
   std::optional<double> scscore;
   bool excluded = false;
+  bool reusable = false;
 };
 
 struct SceneChange
@@ -722,6 +723,15 @@ void mark_frames(VideoInfo& video, const TimeWindow& window, Fun&& fun)
     {
       break;
     }
+  }
+}
+
+template<typename Fun>
+void mark_frames(VideoInfo& video, const std::vector<TimeWindow>& windows, Fun&& fun)
+{
+  for (const TimeWindow& w : windows)
+  {
+    mark_frames(video, w, std::forward<Fun>(fun));
   }
 }
 
@@ -2154,6 +2164,11 @@ std::vector<OutputSegment> compute_dub(
     }
 
     search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
+    while (search_area.startOffset() > 0
+           && search_area.video->frames.at(search_area.startOffset() - 1).reusable)
+    {
+      search_area.widenLeft(1);
+    }
   }
 
   if (curpts < a.frames.back().pts)
@@ -2199,6 +2214,7 @@ struct ProgramData
   std::vector<TimeWindow> excludedSegments;
   std::vector<TimeWindow> noBreakSegments;
   std::vector<std::pair<TimeWindow, TimeWindow>> forcedMatches;
+  std::vector<TimeWindow> reusableSegments;
   bool dryRun = false;
 };
 
@@ -2239,6 +2255,7 @@ void digidub(VideoInfo& video,
              const std::vector<TimeWindow>& excludedSegments,
              const std::vector<TimeWindow>& noBreakSegments,
              const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches,
+             const std::vector<TimeWindow>& reusableSegments,
              bool dryRun = false)
 {
   const QDir videodir = QFileInfo(video.filePath).dir();
@@ -2272,6 +2289,8 @@ void digidub(VideoInfo& video,
     mark_excluded_frames(video, {p.first});
   }
   prevent_breaks_at_frames(video, noBreakSegments);
+
+  mark_frames(audioSource, reusableSegments, [](VideoFrameInfo& frame) { frame.reusable = true; });
 
   std::vector<OutputSegment> segments = compute_dub(video, audioSource, forcedMatches);
   qDebug() << segments.size() << "segments";
@@ -2496,6 +2515,7 @@ void main_proc()
             gProgramData.excludedSegments,
             gProgramData.noBreakSegments,
             gProgramData.forcedMatches,
+            gProgramData.reusableSegments,
             gProgramData.dryRun);
   }
   else if (gProgramData.command == "silencedetect")
@@ -2667,6 +2687,10 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
     else if (arg == "--force-match")
     {
       parse_forcematch_arg(pd.forcedMatches, args.at(++i));
+    }
+    else if (arg == "--reusable")
+    {
+      parse_timespan_arg(pd.reusableSegments, args.at(++i));
     }
     else if (arg == "--dry-run")
     {
