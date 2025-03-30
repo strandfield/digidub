@@ -2558,6 +2558,21 @@ void main_proc()
 
     return qApp->exit(0);
   }
+  else if (gProgramData.command == "scdet")
+  {
+    fetch_sc_frames(gProgramData.firstVideo);
+
+    std::cout << "detected " << gProgramData.firstVideo.scenechanges.size()
+              << " scene changes:" << std::endl;
+
+    for (const SceneChange& sc : gProgramData.firstVideo.scenechanges)
+    {
+      std::cout << formatSeconds(sc.time).toStdString() << " (score=" << sc.score << ")"
+                << std::endl;
+    }
+
+    return qApp->exit(0);
+  }
 }
 
 void set_video_arg(VideoInfo& video, const QString& arg)
@@ -2758,10 +2773,15 @@ int main(int argc, char *argv[])
     pd.command = "dub";
     parse_dub_args(pd, args.mid(2));
   }
-  else if (args.at(1) == "silencedetect" || args.at(1) == "blackdetect")
+  else if (args.at(1) == "silencedetect" || args.at(1) == "blackdetect" || args.at(1) == "scdet")
   {
     pd.command = args.at(1);
     parse_silencedetect_args(pd, args.mid(2));
+  }
+  else
+  {
+    std::cerr << "Unknown command: " << args.at(1).toStdString();
+    return 1;
   }
 
   invoke_main();
