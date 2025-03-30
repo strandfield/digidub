@@ -21,7 +21,7 @@
 #include <iterator>
 #include <optional>
 
-constexpr const char* VERSION_STRING = "0.2";
+constexpr const char* VERSION_STRING = "0.3";
 
 bool debugmatches = false;
 int frame_unmatch_threshold = 21;
