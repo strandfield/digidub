@@ -941,6 +941,8 @@ void fetch_black_frames(VideoInfo& video)
 
 void mark_sc_frames(VideoInfo& video)
 {
+  Q_ASSERT(!video.frames.empty());
+
   auto get_frame_timestamp = [&video](const VideoFrameInfo& frame) {
     return frame.pts * get_frame_delta(video);
   };
@@ -1032,7 +1034,7 @@ std::vector<SceneChange> scdet(const VideoInfo& video)
   return result;
 }
 
-void fetch_sc_frames(VideoInfo& video)
+void fetch_sc(VideoInfo& video)
 {
   // read from disk or compute on the fly
   {
@@ -1084,8 +1086,21 @@ void fetch_sc_frames(VideoInfo& video)
       }
     }
   }
+}
 
+void fetch_sc_frames(VideoInfo& video)
+{
+  fetch_sc(video);
   mark_sc_frames(video);
+}
+
+void filter_sc(VideoInfo& video, double minScore)
+{
+  auto it = std::remove_if(video.scenechanges.begin(),
+                           video.scenechanges.end(),
+                           [minScore](const SceneChange& e) { return e.score < minScore; });
+
+  video.scenechanges.erase(it, video.scenechanges.end());
 }
 
 void merge_small_scenes(VideoInfo& video, size_t minSize)
@@ -2215,6 +2230,7 @@ struct ProgramData
   std::vector<TimeWindow> noBreakSegments;
   std::vector<std::pair<TimeWindow, TimeWindow>> forcedMatches;
   std::vector<TimeWindow> reusableSegments;
+  std::optional<double> scThreshold;
   bool dryRun = false;
 };
 
@@ -2256,6 +2272,7 @@ void digidub(VideoInfo& video,
              const std::vector<TimeWindow>& noBreakSegments,
              const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches,
              const std::vector<TimeWindow>& reusableSegments,
+             std::optional<double> scThreshold,
              bool dryRun = false)
 {
   const QDir videodir = QFileInfo(video.filePath).dir();
@@ -2277,7 +2294,9 @@ void digidub(VideoInfo& video,
   fetch_black_frames(video);
   //fetch_black_frames(audioSource);
 
-  fetch_sc_frames(video);
+  fetch_sc(video);
+  filter_sc(video, scThreshold.value_or(0.));
+  mark_sc_frames(video);
   //fetch_sc_frames(audioSource);
 
   merge_small_scenes(video, 7);
@@ -2516,6 +2535,7 @@ void main_proc()
             gProgramData.noBreakSegments,
             gProgramData.forcedMatches,
             gProgramData.reusableSegments,
+            gProgramData.scThreshold,
             gProgramData.dryRun);
   }
   else if (gProgramData.command == "silencedetect")
@@ -2560,7 +2580,8 @@ void main_proc()
   }
   else if (gProgramData.command == "scdet")
   {
-    fetch_sc_frames(gProgramData.firstVideo);
+    fetch_sc(gProgramData.firstVideo);
+    filter_sc(gProgramData.firstVideo, gProgramData.scThreshold.value_or(0.));
 
     std::cout << "detected " << gProgramData.firstVideo.scenechanges.size()
               << " scene changes:" << std::endl;
@@ -2707,6 +2728,16 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
     {
       parse_timespan_arg(pd.reusableSegments, args.at(++i));
     }
+    else if (arg == "--sc-threshold")
+    {
+      bool ok;
+      pd.scThreshold = args.at(++i).toDouble(&ok);
+      if (!ok)
+      {
+        qDebug() << "could not parse double argument: " << args.at(i);
+        std::exit(1);
+      }
+    }
     else if (arg == "--dry-run")
     {
       pd.dryRun = true;
@@ -2727,7 +2758,7 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
   }
 }
 
-void parse_silencedetect_args(ProgramData& pd, const QStringList& args)
+void parse_single_video_arg(ProgramData& pd, const QStringList& args)
 {
   for (int i(0); i < args.size(); ++i)
   {
@@ -2736,6 +2767,34 @@ void parse_silencedetect_args(ProgramData& pd, const QStringList& args)
     if (QFileInfo(arg).exists())
     {
       set_video_arg(pd.firstVideo, arg);
+    }
+    else
+    {
+      qDebug() << "unknown arg: " << arg;
+      std::exit(1);
+    }
+  }
+}
+
+void parse_scdet_args(ProgramData& pd, const QStringList& args)
+{
+  for (int i(0); i < args.size(); ++i)
+  {
+    const QString& arg = args.at(i);
+
+    if (arg == "--sc-threshold")
+    {
+      bool ok;
+      pd.scThreshold = args.at(++i).toDouble(&ok);
+      if (!ok)
+      {
+        qDebug() << "could not parse double argument: " << args.at(i);
+        std::exit(1);
+      }
+    }
+    else if (!args.startsWith("-"))
+    {
+      set_video_arg(pd.firstVideo, args.at(i));
     }
     else
     {
@@ -2773,10 +2832,15 @@ int main(int argc, char *argv[])
     pd.command = "dub";
     parse_dub_args(pd, args.mid(2));
   }
-  else if (args.at(1) == "silencedetect" || args.at(1) == "blackdetect" || args.at(1) == "scdet")
+  else if (args.at(1) == "silencedetect" || args.at(1) == "blackdetect")
   {
     pd.command = args.at(1);
-    parse_silencedetect_args(pd, args.mid(2));
+    parse_single_video_arg(pd, args.mid(2));
+  }
+  else if (args.at(1) == "scdet")
+  {
+    pd.command = args.at(1);
+    parse_scdet_args(pd, args.mid(2));
   }
   else
   {
