@@ -2231,6 +2231,8 @@ struct ProgramData
   std::vector<std::pair<TimeWindow, TimeWindow>> forcedMatches;
   std::vector<TimeWindow> reusableSegments;
   std::optional<double> scThreshold;
+  std::optional<double> areaMatchThreshold;
+  std::optional<int> frameUnmatchThreshold;
   bool dryRun = false;
 };
 
@@ -2528,6 +2530,16 @@ void main_proc()
       return qApp->exit(1);
     }
 
+    if (gProgramData.areaMatchThreshold.has_value())
+    {
+      area_match_threshold = gProgramData.areaMatchThreshold.value();
+    }
+
+    if (gProgramData.frameUnmatchThreshold.has_value())
+    {
+      frame_unmatch_threshold = gProgramData.frameUnmatchThreshold.value();
+    }
+
     digidub(gProgramData.firstVideo,
             gProgramData.secondVideo,
             gProgramData.outputPath,
@@ -2735,6 +2747,26 @@ void parse_dub_args(ProgramData& pd, const QStringList& args)
       if (!ok)
       {
         qDebug() << "could not parse double argument: " << args.at(i);
+        std::exit(1);
+      }
+    }
+    else if (arg == "--area-match-threshold")
+    {
+      bool ok;
+      pd.areaMatchThreshold = args.at(++i).toDouble(&ok);
+      if (!ok)
+      {
+        qDebug() << "could not parse double argument: " << args.at(i);
+        std::exit(1);
+      }
+    }
+    else if (arg == "--frame-unmatch-threshold")
+    {
+      bool ok;
+      pd.frameUnmatchThreshold = args.at(++i).toInt(&ok);
+      if (!ok)
+      {
+        qDebug() << "could not parse int argument: " << args.at(i);
         std::exit(1);
       }
     }
