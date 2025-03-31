@@ -21,7 +21,7 @@
 #include <iterator>
 #include <optional>
 
-constexpr const char* VERSION_STRING = "0.3";
+constexpr const char* VERSION_STRING = "0.4-dev";
 
 bool debugmatches = false;
 int frame_unmatch_threshold = 21;
@@ -481,6 +481,13 @@ public:
   FrameSpan subspan(size_t offset, size_t count) const
   {
     return FrameSpan(*video, first + offset, count);
+  }
+
+  bool contains(const FrameSpan& other) const
+  {
+    assert(other.video == this->video);
+    return other.video == this->video && other.startOffset() >= startOffset()
+           && other.endOffset() <= endOffset();
   }
 };
 
@@ -2086,30 +2093,115 @@ std::vector<FrameSpan> extract_segments(const VideoInfo& video)
   return result;
 }
 
-std::optional<TimeWindow> find_forced_match(
-    const VideoInfo& a,
-    size_t frameIndex,
-    const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches)
+std::vector<std::pair<FrameSpan, FrameSpan>> find_forced_matches(
+    const FrameSpan& segment,
+    const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches,
+    const VideoInfo& audio)
 {
-  double t = get_frame_timestamp(a, frameIndex);
+  std::vector<std::pair<FrameSpan, FrameSpan>> result;
+
   for (const auto& p : forcedMatches)
   {
-    if (p.first.contains(t))
+    auto spans = std::pair(get_span(*segment.video, p.first), get_span(audio, p.second));
+
+    if (segment.contains(spans.first))
     {
-      return p.second;
+      result.push_back(spans);
     }
   }
 
-  return std::nullopt;
+  return result;
 }
+
+class Dubber
+{
+private:
+  const VideoInfo& m_video;
+  int m_curpts = 0;
+
+public:
+  std::vector<OutputSegment> result;
+
+public:
+  explicit Dubber(const VideoInfo& inputVideo)
+      : m_video(inputVideo)
+  {}
+
+  void dub(const FrameSpan& videoSegment, const FrameSpan& audio)
+  {
+    assert(videoSegment.video == &m_video);
+
+    if (videoSegment.size() == 0)
+    {
+      return;
+    }
+
+    qDebug() << "M:" << videoSegment << "~" << audio;
+
+    // on crée un segment pour rejoindre le match
+    if (m_video.frames.at(videoSegment.startOffset()).pts > m_curpts)
+    {
+      OutputSegment oseg;
+      oseg.pts = m_curpts;
+      oseg.duration = m_video.frames.at(videoSegment.startOffset()).pts - m_curpts;
+      oseg.input.src = 0;
+      // segment.input.speed = 1;
+      oseg.input.start = m_curpts * get_frame_delta(m_video);
+      oseg.input.end = (oseg.pts + oseg.duration) * get_frame_delta(m_video);
+      result.push_back(oseg);
+
+      m_curpts += oseg.duration;
+    }
+
+    if (videoSegment.size() > 0)
+    {
+      OutputSegment oseg;
+      oseg.pts = m_curpts;
+      oseg.duration = get_nth_frame_pts(m_video, videoSegment.endOffset()) - m_curpts;
+      oseg.input.src = 1;
+      oseg.input.start = audio.video->frames.at(audio.startOffset()).pts
+                         * get_frame_delta(*audio.video);
+      //  segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
+      oseg.input.end = get_nth_frame_pts(*audio.video, audio.endOffset())
+                       * get_frame_delta(*audio.video);
+      // segment.input.speed = (segment.input.end - segment.input.start)
+      //                       / (segment.duration * a.framedelta());
+      result.push_back(oseg);
+
+      m_curpts += oseg.duration;
+    }
+  }
+
+  void writeFinalSegment()
+  {
+    if (m_curpts < m_video.frames.back().pts)
+    {
+      const int duration = m_video.frames.back().pts + 1 - m_curpts;
+      const double secs = duration * get_frame_delta(m_video);
+      if (secs >= 0.250)
+      {
+        // on ajoute un segment pour terminer la video
+        OutputSegment segment;
+        segment.pts = m_curpts;
+        segment.duration = duration;
+        segment.input.src = 0;
+        //segment.input.speed = 1;
+        segment.input.start = m_curpts * get_frame_delta(m_video);
+        segment.input.end = (segment.pts + segment.duration) * get_frame_delta(m_video);
+        result.push_back(segment);
+
+        m_curpts += segment.duration;
+      }
+    }
+  }
+};
 
 std::vector<OutputSegment> compute_dub(
     const VideoInfo& a,
     const VideoInfo& b,
     const std::vector<std::pair<TimeWindow, TimeWindow>>& forcedMatches)
 {
-  std::vector<OutputSegment> result;
-  int curpts = 0;
+  Dubber dubber{a};
 
   FrameSpan search_area{b, 0, b.frames.size()};
 
@@ -2124,61 +2216,33 @@ std::vector<OutputSegment> compute_dub(
   {
     assert(segment.size() > 0);
 
-    std::pair<FrameSpan, FrameSpan> matchingspans;
-
     if (!segment.at(0).excluded)
     {
-      matchingspans = find_best_subspan_match(segment, search_area);
+      std::pair<FrameSpan, FrameSpan> matchingspans = find_best_subspan_match(segment, search_area);
+
+      if (matchingspans.first.count > 0)
+      {
+        dubber.dub(matchingspans.first, matchingspans.second);
+        search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
+      }
     }
     else
     {
-      std::optional<TimeWindow> fmatch = find_forced_match(a, segment.startOffset(), forcedMatches);
-      if (fmatch.has_value())
+      std::vector<std::pair<FrameSpan, FrameSpan>> fmatches = find_forced_matches(segment,
+                                                                                  forcedMatches,
+                                                                                  b);
+
+      for (const auto& p : fmatches)
       {
-        matchingspans.first = segment;
-        matchingspans.second = get_span(b, *fmatch);
+        dubber.dub(p.first, p.second);
+      }
+
+      if (!fmatches.empty())
+      {
+        search_area = FrameSpan(b, fmatches.back().second.endOffset(), -1);
       }
     }
 
-    if (matchingspans.first.count == 0)
-    {
-      continue;
-    }
-
-    qDebug() << "M:" << matchingspans.first << "~" << matchingspans.second;
-
-    // on crée un segment pour rejoindre le match
-    if (a.frames.at(matchingspans.first.startOffset()).pts > curpts)
-    {
-      OutputSegment oseg;
-      oseg.pts = curpts;
-      oseg.duration = a.frames.at(matchingspans.first.startOffset()).pts - curpts;
-      oseg.input.src = 0;
-      // segment.input.speed = 1;
-      oseg.input.start = curpts * get_frame_delta(a);
-      oseg.input.end = (oseg.pts + oseg.duration) * get_frame_delta(a);
-      result.push_back(oseg);
-
-      curpts += oseg.duration;
-    }
-
-    if (matchingspans.first.size() > 0)
-    {
-      OutputSegment oseg;
-      oseg.pts = curpts;
-      oseg.duration = get_nth_frame_pts(a, matchingspans.first.endOffset()) - curpts;
-      oseg.input.src = 1;
-      oseg.input.start = b.frames.at(matchingspans.second.startOffset()).pts * get_frame_delta(b);
-      //  segment.input.end = segment.input.start + (segment.duration * get_frame_delta(a));
-      oseg.input.end = get_nth_frame_pts(b, matchingspans.second.endOffset()) * get_frame_delta(b);
-      // segment.input.speed = (segment.input.end - segment.input.start)
-      //                       / (segment.duration * a.framedelta());
-      result.push_back(oseg);
-
-      curpts += oseg.duration;
-    }
-
-    search_area = FrameSpan(b, matchingspans.second.endOffset(), -1);
     while (search_area.startOffset() > 0
            && search_area.video->frames.at(search_area.startOffset() - 1).reusable)
     {
@@ -2186,27 +2250,9 @@ std::vector<OutputSegment> compute_dub(
     }
   }
 
-  if (curpts < a.frames.back().pts)
-  {
-    const int duration = a.frames.back().pts + 1 - curpts;
-    const double secs = duration * get_frame_delta(a);
-    if (secs >= 0.250)
-    {
-      // on ajoute un segment pour terminer la video
-      OutputSegment segment;
-      segment.pts = curpts;
-      segment.duration = duration;
-      segment.input.src = 0;
-      //segment.input.speed = 1;
-      segment.input.start = curpts * get_frame_delta(a);
-      segment.input.end = (segment.pts + segment.duration) * get_frame_delta(a);
-      result.push_back(segment);
+  dubber.writeFinalSegment();
 
-      curpts += segment.duration;
-    }
-  }
-
-  return result;
+  return dubber.result;
 }
 
 QDebug operator<<(QDebug dbg, const OutputSegment& segment)
