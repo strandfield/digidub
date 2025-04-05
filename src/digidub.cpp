@@ -419,7 +419,11 @@ public:
   }
 
   size_t size() const { return count; }
-  const VideoFrameInfo& at(size_t i) const { return video->frames.at(first + i); }
+  const VideoFrameInfo& at(size_t i) const
+  {
+    assert(i < count);
+    return video->frames.at(first + i);
+  }
 
   size_t startOffset() const { return first; }
   size_t endOffset() const { return first + count; }
@@ -442,6 +446,7 @@ public:
     num = std::min(this->first, num);
     this->first -= num;
     this->count += num;
+    assert(endOffset() <= this->video->frames.size());
   }
 
   void trimLeft(size_t num)
@@ -1262,8 +1267,8 @@ MatchingArea find_best_matching_area_ex(const FrameSpan& pattern, const FrameSpa
   // but also in terms of number of phash-dist less than a given value.
   double bestavg = 64;
 
-  size_t imax = searchArea.size() + 1 - pattern.size();
-  for (size_t i(0); i < imax; ++i)
+  size_t imax = searchArea.size() - pattern.size();
+  for (size_t i(0); i <= imax; ++i)
   {
     int dacc = 0;
     int dmin = 64;
@@ -1851,7 +1856,13 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
 
     MatchingArea local_match = find_best_matching_area_ex(first_to_second_scene_transition,
                                                           basematch.left(search_area_size));
-    assert(local_match.score <= area_match_threshold);
+
+    if (local_match.score > area_match_threshold)
+    {
+      // happens in S1E46
+      qDebug() << "please verify the match near" << local_match.pattern << "~" << local_match.match
+               << QString(" (score=%1)").arg(local_match.score);
+    }
 
     vid1_first_sc = local_match.pattern.startOffset() + local_match.pattern.size() / 2;
     vid2_first_sc = local_match.match.startOffset() + local_match.match.size() / 2;
@@ -1866,7 +1877,12 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
     const size_t search_area_size = number_of_frames_in_range(std::prev(end, 3), end);
     MatchingArea local_match = find_best_matching_area_ex(penultimate_to_last_scene_transition,
                                                           basematch.right(search_area_size));
-    assert(local_match.score <= area_match_threshold);
+    if (local_match.score > area_match_threshold)
+    {
+      // happens in S1E46
+      qDebug() << "please verify the match near" << local_match.pattern << "~" << local_match.match
+               << QString(" (score=%1)").arg(local_match.score);
+    }
 
     vid1_last_sc = local_match.pattern.startOffset() + local_match.pattern.size() / 2;
     vid2_last_sc = local_match.match.startOffset() + local_match.match.size() / 2;
