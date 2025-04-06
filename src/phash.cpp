@@ -7,6 +7,9 @@
 #include <algorithm>
 #include <iterator>
 
+// for reference:
+// https://docs.scipy.org/doc/scipy/reference/generated/scipy.fftpack.dct.html
+
 namespace {
 
 // axis 0 is matrix line, which would be y-axis for an image.
