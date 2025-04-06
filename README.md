@@ -46,7 +46,7 @@ the program when it struggles to produce a good output:
 
 For compiling:
 - Qt 6
-- a compiler supporting C++
+- a compiler supporting C++ 20
 
 For running the program:
 - FFmpeg and mkvmerge must be installed on your system.
