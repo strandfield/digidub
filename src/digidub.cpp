@@ -21,7 +21,7 @@
 #include <iterator>
 #include <optional>
 
-constexpr const char* VERSION_STRING = "0.4-dev";
+constexpr const char* VERSION_STRING = "1.0";
 
 bool debugmatches = false;
 int frame_unmatch_threshold = 21;
@@ -2898,6 +2898,129 @@ void parse_scdet_args(ProgramData& pd, const QStringList& args)
   }
 }
 
+void showDubHelp()
+{
+  std::cout << "dub a video using audio from another video." << std::endl;
+  std::cout << "a perceptual hash (phash) algorithm is used to match frames between the first and "
+               "second video so that audio can be extracted and synced."
+            << std::endl;
+
+  std::cout << std::endl;
+
+  std::cout << "Syntax:" << std::endl;
+  std::cout << "digidub dub <main-video.mkv> --with <secondary-video.mkv> [options]" << std::endl;
+
+  std::cout << std::endl;
+
+  constexpr const char* opts = R"(
+  -o <output.mkv>                      Specify an output file name.
+  --exclude <timewindow-spec>          Exclude part of the video from the dubbing process.
+  --sc-threshold <value>               Change the scene-change threshold.
+  --no-break <timewindow-spec>         Prevent a break within the specified time window.
+  --area-match-threshold <value>       Change the area match threshold.
+  --frame-unmatch-threshold <value>    Change the frame unmatch threshold.
+  --reusable <timewindow-spec>         Specify that some audio can be reused.
+  --force-match <match-spec>           Force a match.
+  --debug-matches                      Print debugging information about the matches.
+  --dry-run                            Do not produce the output file.
+)";
+
+  std::cout << "Options:" << opts << std::endl;
+
+  std::cout << "Parameter syntax:" << std::endl;
+  std::cout << "  <time-spec>       --> mm:ss.zzz" << std::endl;
+  std::cout << "  <timewindow-spec> --> <time-spec>-<time-spec>" << std::endl;
+  std::cout << "  <match-spec>      --> <timewindow-spec>~<timewindow-spec>" << std::endl;
+
+  std::cout << std::endl;
+}
+
+void showSilenceDetectHelp()
+{
+  constexpr const char* des = R"(
+Silences are used to split the video to dub into segments that are then
+individually dubbed.
+)";
+  std::cout << "Performs silence detection on a video and prints the result." << des << std::endl;
+
+  std::cout << "Syntax:" << std::endl;
+  std::cout << "digidub silencedetect <video.mkv>" << std::endl;
+}
+
+void showBlackDetectHelp()
+{
+  constexpr const char* des = R"(
+Blacks frames are used to split the video to dub into segments that are then
+individually dubbed.
+)";
+  std::cout << "Performs black frame detection on a video and prints the result." << des
+            << std::endl;
+
+  std::cout << "Syntax:" << std::endl;
+  std::cout << "digidub blackdetect <video.mkv>" << std::endl;
+}
+
+void showScdetHelp()
+{
+  constexpr const char* des = R"(
+While silences and black frames are used to split the video into segments,
+scene changes are used to split segments into scenes.
+Scenes are then matched between the two input videos.
+)";
+  std::cout << "Performs scene-change detection on a video and prints the result." << des
+            << std::endl;
+
+  std::cout << "Syntax:" << std::endl;
+  std::cout << "digidub scdet <video.mkv>" << std::endl;
+}
+
+void showHelp(const QStringList& args)
+{
+  if (args.size() > 1)
+  {
+    if (args.at(1) == "dub")
+    {
+      return showDubHelp();
+    }
+    else if (args.at(1) == "silencedetect")
+    {
+      return showSilenceDetectHelp();
+    }
+    else if (args.at(1) == "blackdetect")
+    {
+      return showBlackDetectHelp();
+    }
+    else if (args.at(1) == "scdet")
+    {
+      return showScdetHelp();
+    }
+  }
+
+  std::cout << "digidub is a Qt-based commandline program for dubbing a video with audio from "
+               "another video."
+            << std::endl;
+  std::cout
+      << "digidub uses a perceptual hash (phash) algorithm to find similar frames between the "
+         "video to dub and the video used as audio source in order to extract and sync the audio."
+      << std::endl;
+  std::cout << "The program assumes that FFmpeg and mkvmerge are installed on your system."
+            << std::endl;
+
+  std::cout << std::endl;
+
+  std::cout << "Main syntax:" << std::endl;
+  std::cout << "digidub dub <main-video.mkv> --with <secondary-video.mkv> [-o <output.mkv>]"
+            << std::endl;
+
+  std::cout << std::endl;
+
+  std::cout << "Commands:" << std::endl;
+  std::cout << "  dub              dub a video with audio from another video" << std::endl;
+  std::cout << "  silencedetect    performs silence detection on a video" << std::endl;
+  std::cout << "  blackdetect      performs black frames detection on a video" << std::endl;
+  std::cout << "  scdet            performs scene-change detection on a video" << std::endl;
+}
+
 int main(int argc, char *argv[])
 {
   QApplication::setApplicationName("digidub");
@@ -2910,8 +3033,7 @@ int main(int argc, char *argv[])
 
   if (args.contains("-h") || args.contains("--help") || args.size() == 1)
   {
-    std::cout << "digidub dub <main-video.mkv> --with <secondary-video.mkv> [-o <output.mkv>]"
-              << std::endl;
+    showHelp(args);
     return 0;
   }
 

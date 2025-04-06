@@ -1,0 +1,65 @@
+
+
+// v0.2
+
+dub Digimon.S1.E04.mkv --with fre/Digi1x04.mkv --exclude 18:14.041-18:22.066
+dub Digimon.S1.E05.mkv --with fre/Digi1x05.mkv --exclude 03:02.311-03:06.751
+dub Digimon.S1.E06.mkv --with fre/Digi1x06.mkv --exclude 04:40.993-04:45.539
+dub Digimon.S1.E07.mkv --with fre/Digi1x07.mkv --exclude 03:46.181-03:50.687
+dub Digimon.S1.E08.mkv --with fre/Digi1x08.mkv --exclude 02:13.465-02:18.484 --exclude 16:52.603-16:53.970 --exclude 17:48.314-17:51.660
+dub Digimon.S1.E09.mkv --with fre/Digi1x09.mkv --exclude 04:56.010-05:02.177
+dub Digimon.S1.E10.mkv --with fre/Digi1x10.mkv
+dub Digimon.S1.E11.mkv --with fre/Digi1x11.mkv
+dub Digimon.S1.E12.mkv --with fre/Digi1x12.mkv --exclude 02:40.005-02:50.097 --exclude 04:22.017-04:25.086 --no-break 16:25.268-16:29.295 --force-match 18:43.998-18:53.136~18:39.999-18:49.139
+dub Digimon.S1.E13.mkv --with fre/Digi1x13.mkv --exclude 17:05.4-17:11.5 --exclude 17:30.8-17:38.1 --exclude 18:09.3-18:20
+dub Digimon.S1.E14.mkv --with fre/Digi1x14.mkv --exclude 18:53.1-18:59.9
+dub Digimon.S1.E15.mkv --with fre/Digi1x15.mkv --exclude 03:20.7-03:27.3
+dub Digimon.S1.E16.mkv --with fre/Digi1x16.mkv --exclude 18:32.8-18:44.2
+dub Digimon.S1.E17.mkv --with fre/Digi1x17.mkv --exclude 03:05.6-03:10.4
+dub Digimon.S1.E18.mkv --with fre/Digi1x18.mkv --exclude 02:29.5-02:32.4
+dub Digimon.S1.E19.mkv --with fre/Digi1x19.mkv
+dub Digimon.S1.E20.mkv --with fre/Digi1x20.mkv --exclude 09:51.7-09:53.2 --exclude 17:54.2-17:55.3
+dub Digimon.S1.E21.mkv --with fre/Digi1x21.mkv --force-match 01:30.4-01:46.3~01:30.26-01:46.18 --exclude 03:14.37-03:16.3 --no-break 07:29-07:30 --exclude 18:26.2-18:29.12
+
+// v0.3
+
+dub Digimon.S1.E21.mkv --with fre/Digi1x21.mkv --force-match 01:30.4-01:46.3~01:30.26-01:46.18 --reusable 03:13-03:17 --no-break 07:29-07:30 --reusable 18:19-18:24
+dub Digimon.S1.E22.mkv --with fre/Digi1x22.mkv --reusable 02:31-02:34
+dub Digimon.S1.E23.mkv --with fre/Digi1x23.mkv --reusable 03:46-03:52
+dub Digimon.S1.E24.mkv --with fre/Digi1x24.mkv --reusable 04:22-04:27
+dub Digimon.S1.E25.mkv --with fre/Digi1x25.mkv
+dub Digimon.S1.E26.mkv --with fre/Digi1x26.mkv --force-match 00:00-1:30.5~00:00-1:30.2
+dub Digimon.S1.E27.mkv --with fre/Digi1x27.mkv --exclude 03:20.64-03:20.9 --exclude 17:28.6-17:32 --sc-threshold 16
+dub Digimon.S1.E28.mkv --with fre/Digi1x28.mkv --reusable 03:04-03:06 --exclude 12:44.1-12:48.1
+dub Digimon.S1.E29.mkv --with fre/Digi1x29.mkv --force-match 0:00-0:29.24~0:00-0:30.041 --reusable 02:26-02:31
+dub Digimon.S1.E30.mkv --with fre/Digi1x30.mkv
+dub Digimon.S1.E31.mkv --with fre/Digi1x31.mkv
+dub Digimon.S1.E32.mkv --with fre/Digi1x32.mkv --exclude 3:01.6-3:13
+dub Digimon.S1.E33.mkv --with fre/Digi1x33.mkv --reusable 18:00-18:04
+dub Digimon.S1.E34.mkv --with fre/Digi1x34.mkv
+dub Digimon.S1.E35.mkv --with fre/Digi1x35.mkv --reusable 15:46-15:50
+dub Digimon.S1.E36.mkv --with fre/Digi1x36.mkv --area-match-threshold 28
+dub Digimon.S1.E37.mkv --with fre/Digi1x37.mkv --exclude 08:59.4-09:04.2 --exclude 14:56.7-15:08.7
+
+// v0.4
+dub Digimon.S1.E38.mkv --with fre/Digi1x38.mkv --force-match 15:41-15:45.8~16:20.9-16:25.7 --exclude 15:45-15:54 --force-match 15:53.63-16:01~16:26.2-16:34
+dub Digimon.S1.E39.mkv --with fre/Digi1x39.mkv
+dub Digimon.S1.E40.mkv --with fre/Digi1x40.mkv --reusable 17:42-17:49 --force-match 17:09.8-17:12.5~17:46.1-17:48.7
+dub Digimon.S1.E41.mkv --with fre/Digi1x41.mkv --exclude 17:00.5-17:03.6 --reusable 17:36-17:42 
+dub Digimon.S1.E42.mkv --with fre/Digi1x42.mkv --exclude 15:15.7-15:19.8
+dub Digimon.S1.E43.mkv --with fre/Digi1x43.mkv
+dub Digimon.S1.E44.mkv --with fre/Digi1x44.mkv --area-match-threshold 24
+dub Digimon.S1.E45.mkv --with fre/Digi1x45.mkv
+dub Digimon.S1.E46.mkv --with fre/Digi1x46.mkv --force-match 0:00-0:29.12~00:00-0:30.081 --force-match 03:28.6-03:29.8~03:03.6-03:04.8 --force-match 03:29.8-03:31.6~03:21.8-03:23.6 --reusable 18:50-18:57
+dub Digimon.S1.E47.mkv --with fre/Digi1x47.mkv --reusable 2:41-2:47 --exclude 16:20.7-16:22.9
+dub Digimon.S1.E48.mkv --with fre/Digi1x48.mkv --reusable 18:25-18:29 --force-match 19:11.1-19:19.8~19:49-19:57.8
+dub Digimon.S1.E49.mkv --with fre/Digi1x49.mkv --reusable 3:54-4:00 --force-match 8:01.1-8:20.7~8:17.8-8:38.4 --reusable 16:52-16:57
+dub Digimon.S1.E50.mkv --with fre/Digi1x50.mkv --exclude 17:22.6-17:24.2
+dub Digimon.S1.E51.mkv --with fre/Digi1x51.mkv
+dub Digimon.S1.E52.mkv --with fre/Digi1x52.mkv --force-match 9:19.1-9:20.5~9:42.4-9:43.8 --force-match 12:57.6-13:28.2~13:30.2-14:02.1
+dub Digimon.S1.E53.mkv --with fre/Digi1x53.mkv --reusable 3:30-3:36 --force-match 15:04.1-15:27.3~15:37.7-16:02 --reusable 15:52-16:03 --exclude 15:27-15:28.6
+dub Digimon.S1.E54.mkv --with fre/Digi1x54.mkv --exclude 1:46.7-1:47.8 --force-match 1:47.8-1:49.8~3:19.2-3:21.2 --reusable 3:19-3:22 --force-match 17:46.3-18:12.3~19:53.7-20:20.9
+
+dub Digimon.S1.E01.mkv --with fre/Digi1x01.mkv
+dub Digimon.S1.E02.mkv --with fre/Digi1x02.mkv
+dub Digimon.S1.E03.mkv --with fre/Digi1x03.mkv --exclude 2:31.4-2:32.9 --reusable 2:28-2:32 --exclude 2:35.1-2:35.6
