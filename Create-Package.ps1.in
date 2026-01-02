@@ -1,0 +1,3 @@
+${WINDEPLOYQT_EXECUTABLE} --dir ${CMAKE_CURRENT_LIST_DIR}/release --no-translations --no-opengl-sw .\matcheditor.exe
+copy digidub-cli.exe "${CMAKE_CURRENT_LIST_DIR}/release/digidub-cli.exe"
+copy matcheditor.exe "${CMAKE_CURRENT_LIST_DIR}/release/matcheditor.exe"

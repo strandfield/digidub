@@ -1,0 +1,14 @@
+---
+BasedOnStyle: Mozilla
+BreakBeforeBraces: Allman
+BreakBeforeBinaryOperators: All
+IndentWidth: 2
+ConstructorInitializerIndentWidth: 2
+ColumnLimit: 120
+AccessModifierOffset: -2
+IndentCaseLabels: false
+AllowShortFunctionsOnASingleLine: false
+FixNamespaceComments: true
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+Language: Cpp

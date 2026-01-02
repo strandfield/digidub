@@ -2,3 +2,5 @@ ignore/*
 build/*
 build_Debug/*
 CMakeLists.txt.user
+release/
+*.mkv

@@ -1,0 +1,22 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>missing.svg</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>images/forward-default.png</file>
+        <file>images/forward-hovered.png</file>
+        <file>images/forward-pressed.png</file>
+        <file>images/pause-default.png</file>
+        <file>images/pause-hovered.png</file>
+        <file>images/pause-pressed.png</file>
+        <file>images/play-default.png</file>
+        <file>images/play-hovered.png</file>
+        <file>images/play-pressed.png</file>
+        <file>images/stop-default.png</file>
+        <file>images/stop-hovered.png</file>
+        <file>images/stop-pressed.png</file>
+        <file>images/backward-default.png</file>
+        <file>images/backward-hovered.png</file>
+        <file>images/backward-pressed.png</file>
+    </qresource>
+</RCC>

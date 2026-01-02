@@ -1,52 +1,53 @@
 
 # digidub
 
-A Qt-based command-line program for dubbing a video with audio from another video.
+This project consists of a set of programs for dubbing a video with audio
+from another video.
 
-This program was written for dubbing episodes of the "Digimon: Digital Monsters Season 1-4" DVD boxset
-with audio from the french release.
+These programs were written for dubbing episodes of the "Digimon: Digital Monsters Season 1-4" 
+DVD boxset with audio from the french release.
 
-The goal of the program is simple:
+The goal is simple:
 - take an episode (dubbed in english) from the series
 - take the same episode from the french release
 - produce a video that uses the "english" video and the french audio
 
-Which translates to the following command-line invocation of the program:
-```bash
-digidub dub eng.mkv --with fre.mkv -o output.mkv
-```
+![Summary diagram](dessin.png)
 
-Now, that sounds easy on paper because "this is the same episode", but 
-it turned out to be far more challenging in practice.
+This may sound easy on paper because "this is the same episode", but 
+it turned out to be far more challenging than I anticipated; hence the 
+creation of these programs.
 
 Different releases have different requirements.
+Episodes do not have the same length. Some have scenes added or removed.
+Some scenes may be slowed down to achieve a target length.
 
-For example, all episodes in the french release are about 20 minutes and 
-30 seconds long (my guess is that it is a TV release) ; while episodes
-from the english release ranges from 20:33 to less than 19 minutes.
+A basic tutorial, written in French, is available in the `tutoriel` folder.
+[Link](tutoriel/README.md)
 
-Some episodes from the french release contains additional or removed 
-material. Some even slow down the video to be able to reach the 
-target duration with the same material.
+## Content of this repository
 
-`digidub` tries to do a good job on its own by performing silence, black
-frame and scene change detection on the video to dub before trying to 
-find matching scenes in the second video. <br/>
-Extra information can be provided through the command-line to help
-the program when it struggles to produce a good output:
-- `--exclude` can be used to exclude some part of the video from the 
-  dubbing process
-- `--reusable` can be used to mark some part of the second video that
-  can be used more than once
-- `--force-match` can be used to force a match between two parts in the
-  videos.
+The `tutoriel` folder contains a basic tutorial (in French) on how to use 
+the programs.
 
+The `lib` folder contains source code shared by the following programs.
+
+The `cli` folder contains the source code for the command-line tool `digidub-cli`
+which can be used to create dubbing projects and perform automatic scene
+detection and match search between the two input videos.
+
+The `editor` folder contains the source code for `matcheditor`, a GUI that helps
+visualizing and editing the matches detected by `digidub-cli`.
+
+![Screenshot of matcheditor](tutoriel/screenshots/matcheditor-1.png)
 
 ## Requirements
 
 For compiling:
-- Qt 6
 - a compiler supporting C++ 20
+- CMake
+- Qt 6, with the extra module Qt Multimedia 
 
 For running the program:
-- FFmpeg and mkvmerge must be installed on your system.
+- `ffmpeg` and `mkvmerge` must be installed on your system and added to 
+  your `PATH`
