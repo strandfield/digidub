@@ -104,6 +104,18 @@ void loadAllData(QTextStream& cerr, MediaObject& primaryMedia, MediaObject& seco
 
 } // namespace CreateCommand
 
+static bool likelyVideo(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "mkv" || suffix == "mp4";
+}
+
+static bool likelySubtitle(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "srt" || suffix == "vtt";
+}
+
 int cmd_create(QStringList args)
 {
   QTextStream cout{stdout};
@@ -146,7 +158,7 @@ int cmd_create(QStringList args)
       }
       else
       {
-        cerr << "Unknown option " << a << Qt::endl;
+        cerr << "Unknown option: " << a << "." << Qt::endl;
         return 1;
       }
     }
@@ -154,7 +166,7 @@ int cmd_create(QStringList args)
     {
       if (!savepath.isEmpty())
       {
-        cerr << "An output filename was already provided" << Qt::endl;
+        cerr << "An output filename was already provided." << Qt::endl;
         return 1;
       }
 
@@ -162,27 +174,62 @@ int cmd_create(QStringList args)
     }
   }
 
-  if (inputs.size() != 2)
+  if (inputs.size() < 2)
   {
-    cerr << "Invalid input count. (must be 2)" << Qt::endl;
+    cerr << "At least two inputs files must be specified." << Qt::endl;
     return 1;
   }
 
-  project.setVideoFilePath(inputs[0]);
-  project.setAudioSourceFilePath(inputs[1]);
-
-  if (detect_matches)
+  for (const QString& input : inputs)
   {
-    for (int i(0); i < inputs.size(); ++i)
+    QFileInfo info{input};
+    if (!info.exists() && (!detect_matches || likelySubtitle(info)))
     {
-      if (!QFile::exists(inputs[i]))
+      cerr << "Warning: input file " << input << " does not exist." << Qt::endl;
+    }
+
+    if (likelyVideo(info))
+    {
+      if (project.videoFilePath().isEmpty())
       {
-        cerr << "Input file does not exist " << inputs[i] << Qt::endl;
+        project.setVideoFilePath(input);
+      }
+      else if (project.audioSourceFilePath().isEmpty())
+      {
+        project.setAudioSourceFilePath(input);
+      }
+      else
+      {
+        cerr << "Error: too many video files provided." << Qt::endl;
         return 1;
       }
     }
+    else if (likelySubtitle(info))
+    {
+      project.setSubtitlesFilePath(input);
+    }
+    else
+    {
+      cerr << "Error: unknown input type '" << input << "'." << Qt::endl;
+      return 1;
+    }
+  }
 
-    MediaObject video1{inputs[0]};
+  if (detect_matches)
+  {
+    if (!QFile::exists(project.videoFilePath()))
+    {
+      cerr << "Input file does not exist " << project.videoFilePath() << "." << Qt::endl;
+      return 1;
+    }
+
+    if (!QFile::exists(project.audioSourceFilePath()))
+    {
+      cerr << "Input file does not exist " << project.audioSourceFilePath() << "." << Qt::endl;
+      return 1;
+    }
+
+    MediaObject video1{project.videoFilePath()};
 
     if (project.projectTitle().isEmpty())
     {
@@ -191,7 +238,7 @@ int cmd_create(QStringList args)
         project.setProjectTitle(video1.title());
       }
 
-      MediaObject video2{inputs[1]};
+      MediaObject video2{project.audioSourceFilePath()};
 
       CreateCommand::loadAllData(cerr, video1, video2);
 
@@ -204,7 +251,7 @@ int cmd_create(QStringList args)
 
   if (project.projectTitle().isEmpty())
   {
-    project.setProjectTitle(QFileInfo(inputs[0]).fileName());
+    project.setProjectTitle(QFileInfo(project.videoFilePath()).fileName());
   }
 
   if (!savepath.isEmpty())
