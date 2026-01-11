@@ -95,6 +95,11 @@ MainWindow::MainWindow()
 
   if (QMenu* menu = menuBar()->addMenu("View"))
   {
+    m_actions.toggleMatchListWindow = menu->addAction("Match list",
+                                                      this,
+                                                      &MainWindow::toggleMatchListPopup);
+    m_actions.toggleMatchListWindow->setCheckable(true);
+
     if (QMenu* ts = menu->addMenu("Thumbnail size"))
     {
       ts->addAction("24", [this]() { setThumbnailSize(24); });
@@ -199,6 +204,12 @@ void MainWindow::openFile(const QString& filePath)
 
   m_matchListWindow = new MatchListWindow(*m_project, this);
   m_matchListWindow->show();
+
+  connect(m_matchListWindow,
+          &MatchListWindow::closed,
+          this,
+          &MainWindow::refreshUi,
+          Qt::QueuedConnection);
 
   connect(m_matchListWindow, &MatchListWindow::matchDoubleClicked, this, [this](MatchObject* mob) {
     if (m_matchEditorWidget)
@@ -325,6 +336,14 @@ void MainWindow::doExport()
   m_actions.exportProject->setEnabled(true);
 }
 
+void MainWindow::toggleMatchListPopup()
+{
+  if (m_matchListWindow)
+  {
+    m_matchListWindow->setVisible(!m_matchListWindow->isVisible());
+  }
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
   settings().setValue(WINDOW_GEOM_KEY, saveGeometry());
@@ -355,6 +374,8 @@ void MainWindow::refreshUi()
   m_actions.openProject->setEnabled(!m_project);
   m_actions.saveProject->setEnabled(m_project && m_project->modified());
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);
+  m_actions.toggleMatchListWindow->setEnabled(m_project);
+  m_actions.toggleMatchListWindow->setChecked(m_matchListWindow && m_matchListWindow->isVisible());
 
   updateWindowTitle();
 }

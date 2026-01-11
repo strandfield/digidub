@@ -48,6 +48,7 @@ protected Q_SLOTS:
   void actOpen();
   void actSave();
   void doExport();
+  void toggleMatchListPopup();
 
 protected:
   void closeEvent(QCloseEvent* event) override;
@@ -77,6 +78,7 @@ private:
     QAction* openProject = nullptr;
     QAction* saveProject = nullptr;
     QAction* exportProject = nullptr;
+    QAction* toggleMatchListWindow = nullptr;
   } m_actions;
   MatchEditorWidget* m_matchEditorWidget = nullptr;
   MatchListWindow* m_matchListWindow = nullptr;

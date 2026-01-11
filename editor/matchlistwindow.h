@@ -28,6 +28,7 @@ public:
   void setVideoDuration(int64_t msecs);
 
 Q_SIGNALS:
+  void closed();
   void matchDoubleClicked(MatchObject* mob);
   void findMatchRequested(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
 
@@ -41,6 +42,8 @@ protected Q_SLOTS:
 
 protected:
   bool eventFilter(QObject* watched, QEvent* event) override;
+
+  void closeEvent(QCloseEvent* ev) override;
 
 private:
   void setupConnectionsTo(DubbingProject* project);

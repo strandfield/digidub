@@ -153,6 +153,12 @@ bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
   return false;
 }
 
+void MatchListWindow::closeEvent(QCloseEvent* ev)
+{
+  QWidget::closeEvent(ev);
+  Q_EMIT closed();
+}
+
 void MatchListWindow::setupConnectionsTo(DubbingProject* project)
 {
   connect(project, &DubbingProject::matchAdded, this, &MatchListWindow::onMatchAdded);
