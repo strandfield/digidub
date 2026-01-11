@@ -41,6 +41,7 @@ public:
   DubbingProject* project() const;
   MatchObject* previous() const;
   MatchObject* next() const;
+  int64_t distanceTo(const MatchObject& other) const;
 
   const VideoMatch& value() const;
   void setValue(const VideoMatch& val);

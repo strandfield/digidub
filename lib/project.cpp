@@ -90,6 +90,18 @@ MatchObject* MatchObject::next() const
   return (it != ms.end() && (distafter(**it, *this) != maxdist)) ? *it : nullptr;
 }
 
+int64_t MatchObject::distanceTo(const MatchObject& other) const
+{
+  if (other.value().a.end() <= value().a.start())
+  {
+    return this->value().a.start() - other.value().a.end();
+  }
+  else
+  {
+    return other.value().a.start() - this->value().a.end();
+  }
+}
+
 const VideoMatch& MatchObject::value() const
 {
   return m_value;

@@ -57,6 +57,7 @@ Q_SIGNALS:
   void editionFinished(bool accepted);
 
 protected Q_SLOTS:
+  void onLinkActivated(const QString& link);
   void onMatchEdited();
 
 private:

@@ -18,6 +18,7 @@
 #include <QPushButton>
 #include <QSplitter>
 
+#include <QGridLayout>
 #include <QVBoxLayout>
 
 #include <QBrush>
@@ -717,6 +718,12 @@ private:
   QLabel* m_selectionSizeDisplay;
 };
 
+static QString PREVIOUS_MATCH_LABEL = "< Previous";
+static QString NEXT_MATCH_LABEL = "Next >";
+static QString PREVIOUS_MATCH_LINK = "<a href=\"action:previous\">&lt; Previous</a>";
+static QString NEXT_MATCH_LINK = "<a href=\"action:next\">Next &gt;</a>";
+static QString PREVIEW_LINK = "<a href=\"action:preview\">Preview</a>";
+
 MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
                                      MediaObject& video1,
                                      MediaObject& video2,
@@ -762,13 +769,20 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
         layout->addWidget(m_buttonsContainer);
       }
 
-      if (auto* sublayout = new QHBoxLayout)
+      if (auto* sublayout = new QGridLayout())
       {
-        sublayout->addWidget(m_navigation.previousMatch = new QLabel(this));
-        sublayout->addStretch();
-        sublayout->addWidget(m_navigation.currentMatch = new QLabel(this));
-        sublayout->addStretch();
-        sublayout->addWidget(m_navigation.nextMatch = new QLabel(this));
+        sublayout->addWidget(m_navigation.previousMatch = new QLabel(PREVIOUS_MATCH_LABEL, this),
+                             0,
+                             0,
+                             Qt::AlignLeft);
+        sublayout->addWidget(m_navigation.currentMatch = new QLabel(PREVIEW_LINK, this),
+                             0,
+                             1,
+                             Qt::AlignCenter);
+        sublayout->addWidget(m_navigation.nextMatch = new QLabel(NEXT_MATCH_LABEL, this),
+                             0,
+                             2,
+                             Qt::AlignRight);
 
         layout->addLayout(sublayout);
       }
@@ -797,6 +811,12 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
     connect(m_preview_button, &QPushButton::clicked, this, &MatchEditorWidget::launchPreview);
     connect(m_ok_button, &QPushButton::clicked, this, &MatchEditorWidget::accept);
     connect(m_cancel_button, &QPushButton::clicked, this, &MatchEditorWidget::cancel);
+
+    for (QLabel* label :
+         {m_navigation.previousMatch, m_navigation.currentMatch, m_navigation.nextMatch})
+    {
+      connect(label, &QLabel::linkActivated, this, &MatchEditorWidget::onLinkActivated);
+    }
   }
 
   refreshUi();
@@ -833,28 +853,34 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
       m_items[0]->setSelection(m_original_match.a);
       m_items[1]->setSelection(m_original_match.b);
 
-      m_navigation.currentMatch->setText(mob->toString());
+      //m_navigation.currentMatch->setText(mob->toString());
 
       if (MatchObject* prev = mob->previous())
       {
-        m_navigation.previousMatch->setText(prev->toString());
+        const auto d = mob->distanceTo(*prev);
+        m_navigation.previousMatch->setText(PREVIOUS_MATCH_LINK
+                                            + QString(" (%1s)").arg(QString::number(d / 1000.)));
       }
       else
       {
-        m_navigation.previousMatch->clear();
+        m_navigation.previousMatch->setText(PREVIOUS_MATCH_LABEL);
       }
 
       if (MatchObject* next = mob->next())
       {
-        m_navigation.nextMatch->setText(next->toString());
+        const auto d = mob->distanceTo(*next);
+        m_navigation.nextMatch->setText(QString("(%1s) ").arg(QString::number(d / 1000.))
+                                        + NEXT_MATCH_LINK);
       }
       else
       {
-        m_navigation.nextMatch->clear();
+        m_navigation.nextMatch->setText(NEXT_MATCH_LABEL);
       }
 
       m_buttonsContainer->setEnabled(true);
     }
+
+    refreshUi();
   }
 }
 
@@ -1020,6 +1046,34 @@ void MatchEditorWidget::cancel()
   Q_EMIT editionFinished(false);
 }
 
+void MatchEditorWidget::onLinkActivated(const QString& link)
+{
+  if (link == "action:preview")
+  {
+    launchPreview();
+  }
+  else if (link == "action:next")
+  {
+    assert(m_editedMatchObject);
+    if (m_editedMatchObject)
+    {
+      setCurrentMatchObject(m_editedMatchObject->next());
+    }
+  }
+  else if (link == "action:previous")
+  {
+    assert(m_editedMatchObject);
+    if (m_editedMatchObject)
+    {
+      setCurrentMatchObject(m_editedMatchObject->previous());
+    }
+  }
+  else
+  {
+    qDebug() << "Unknown link:" << link;
+  }
+}
+
 void MatchEditorWidget::onMatchEdited()
 {
   m_edited_match.a = m_items[0]->framesView->matchRange();
@@ -1042,6 +1096,10 @@ void MatchEditorWidget::refreshUi()
   const bool match_modified = m_original_match != m_edited_match;
   m_ok_button->setText(match_modified ? "Save" : "Ok");
   m_cancel_button->setEnabled(match_modified);
+
+  m_navigation.previousMatch->setEnabled(m_editedMatchObject && m_editedMatchObject->previous());
+  m_navigation.currentMatch->setEnabled(m_editedMatchObject);
+  m_navigation.nextMatch->setEnabled(m_editedMatchObject && m_editedMatchObject->next());
 }
 
 #include "matcheditorwidget.moc"

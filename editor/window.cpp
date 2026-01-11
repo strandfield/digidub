@@ -203,7 +203,7 @@ void MainWindow::openFile(const QString& filePath)
   }
 
   m_matchListWindow = new MatchListWindow(*m_project, this);
-  m_matchListWindow->show();
+  //m_matchListWindow->show();
 
   connect(m_matchListWindow,
           &MatchListWindow::closed,
@@ -427,6 +427,12 @@ void MainWindow::launchMatchEditor()
           &MainWindow::onMatchEditingFinished);
 
   m_matchListWindow->setVideoDuration(m_primaryMedia->duration() * 1000);
+
+  m_project->sortMatches();
+  if (!m_project->matches().empty())
+  {
+    m_matchEditorWidget->setCurrentMatchObject(m_project->matches().front());
+  }
 }
 
 void MainWindow::setupConnectionsTo(DubbingProject* project)
