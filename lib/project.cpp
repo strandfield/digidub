@@ -28,6 +28,68 @@ DubbingProject* MatchObject::project() const
   return qobject_cast<DubbingProject*>(parent());
 }
 
+namespace {
+static constexpr uint64_t maxdist = std::numeric_limits<uint64_t>::max();
+
+uint64_t distbefore(const MatchObject& target, const MatchObject& source)
+{
+  if (target.value().a.end() <= source.value().a.start())
+  {
+    return source.value().a.start() - target.value().a.end();
+  }
+
+  return maxdist;
+}
+
+uint64_t distafter(const MatchObject& target, const MatchObject& source)
+{
+  if (target.value().a.start() >= source.value().a.end())
+  {
+    return target.value().a.start() - source.value().a.end();
+  }
+
+  return maxdist;
+}
+} // namespace
+
+MatchObject* MatchObject::previous() const
+{
+  DubbingProject* p = project();
+  if (!p)
+  {
+    return nullptr;
+  }
+
+  const std::vector<MatchObject*>& ms = p->matches();
+
+  auto it = std::min_element(ms.begin(),
+                             ms.end(),
+                             [this](const MatchObject* a, const MatchObject* b) {
+                               return distbefore(*a, *this) < distbefore(*b, *this);
+                             });
+
+  return (it != ms.end() && (distbefore(**it, *this) != maxdist)) ? *it : nullptr;
+}
+
+MatchObject* MatchObject::next() const
+{
+  DubbingProject* p = project();
+  if (!p)
+  {
+    return nullptr;
+  }
+
+  const std::vector<MatchObject*>& ms = p->matches();
+
+  auto it = std::min_element(ms.begin(),
+                             ms.end(),
+                             [this](const MatchObject* a, const MatchObject* b) {
+                               return distafter(*a, *this) < distafter(*b, *this);
+                             });
+
+  return (it != ms.end() && (distafter(**it, *this) != maxdist)) ? *it : nullptr;
+}
+
 const VideoMatch& MatchObject::value() const
 {
   return m_value;

@@ -39,6 +39,8 @@ public:
   int id() const;
 
   DubbingProject* project() const;
+  MatchObject* previous() const;
+  MatchObject* next() const;
 
   const VideoMatch& value() const;
   void setValue(const VideoMatch& val);

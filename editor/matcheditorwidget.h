@@ -9,6 +9,7 @@
 
 #include <QWidget>
 
+class QLabel;
 class QPushButton;
 
 class QTemporaryDir;
@@ -73,6 +74,12 @@ private:
   QPushButton* m_ok_button;
   QPushButton* m_cancel_button;
   QWidget* m_buttonsContainer;
+  struct
+  {
+    QLabel* previousMatch;
+    QLabel* currentMatch;
+    QLabel* nextMatch;
+  } m_navigation;
   MatchObject* m_editedMatchObject = nullptr;
   VideoMatch m_original_match;
   VideoMatch m_edited_match;

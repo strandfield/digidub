@@ -764,6 +764,17 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
 
       if (auto* sublayout = new QHBoxLayout)
       {
+        sublayout->addWidget(m_navigation.previousMatch = new QLabel(this));
+        sublayout->addStretch();
+        sublayout->addWidget(m_navigation.currentMatch = new QLabel(this));
+        sublayout->addStretch();
+        sublayout->addWidget(m_navigation.nextMatch = new QLabel(this));
+
+        layout->addLayout(sublayout);
+      }
+
+      if (auto* sublayout = new QHBoxLayout)
+      {
         sublayout->addWidget(m_items[0] = new MatchEditorItemWidget(*m_leftPlayer));
         sublayout->addWidget(m_items[1] = new MatchEditorItemWidget(*m_rightPlayer));
 
@@ -821,6 +832,26 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
 
       m_items[0]->setSelection(m_original_match.a);
       m_items[1]->setSelection(m_original_match.b);
+
+      m_navigation.currentMatch->setText(mob->toString());
+
+      if (MatchObject* prev = mob->previous())
+      {
+        m_navigation.previousMatch->setText(prev->toString());
+      }
+      else
+      {
+        m_navigation.previousMatch->clear();
+      }
+
+      if (MatchObject* next = mob->next())
+      {
+        m_navigation.nextMatch->setText(next->toString());
+      }
+      else
+      {
+        m_navigation.nextMatch->clear();
+      }
 
       m_buttonsContainer->setEnabled(true);
     }
