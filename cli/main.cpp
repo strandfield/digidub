@@ -260,6 +260,12 @@ int cmd_create(QStringList args)
 
   if (detect_matches)
   {
+    if (!project.matches().empty())
+    {
+      cerr << "Error: match detection requested but project already has matches." << Qt::endl;
+      return 1;
+    }
+
     if (!QFile::exists(project.videoFilePath()))
     {
       cerr << "Input file does not exist " << project.videoFilePath() << "." << Qt::endl;
@@ -280,16 +286,16 @@ int cmd_create(QStringList args)
       {
         project.setProjectTitle(video1.title());
       }
-
-      MediaObject video2{project.audioSourceFilePath()};
-
-      CreateCommand::loadAllData(cerr, video1, video2);
-
-      MatchDetector detector{video1, video2};
-
-      std::vector<VideoMatch> matches = detector.run();
-      project.addMatches(matches);
     }
+
+    MediaObject video2{project.audioSourceFilePath()};
+
+    CreateCommand::loadAllData(cerr, video1, video2);
+
+    MatchDetector detector{video1, video2};
+
+    std::vector<VideoMatch> matches = detector.run();
+    project.addMatches(matches);
   }
 
   if (project.projectTitle().isEmpty())
