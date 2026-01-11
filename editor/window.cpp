@@ -93,6 +93,14 @@ MainWindow::MainWindow()
     menu->addAction("Quit", QKeySequence("Alt+F4"), this, &MainWindow::close);
   }
 
+  if (QMenu* menu = menuBar()->addMenu("Edit"))
+  {
+    m_actions.deleteCurrentMatch = menu->addAction("Delete current match",
+                                                   QKeySequence("Ctrl+D"),
+                                                   this,
+                                                   &MainWindow::deleteCurrentMatch);
+  }
+
   if (QMenu* menu = menuBar()->addMenu("View"))
   {
     m_actions.toggleMatchListWindow = menu->addAction("Match list",
@@ -215,6 +223,7 @@ void MainWindow::openFile(const QString& filePath)
     if (m_matchEditorWidget)
     {
       m_matchEditorWidget->setCurrentMatchObject(mob);
+      refreshUi();
     }
   });
 
@@ -344,6 +353,28 @@ void MainWindow::toggleMatchListPopup()
   }
 }
 
+void MainWindow::deleteCurrentMatch()
+{
+  MatchObject* mob = m_matchEditorWidget->currentMatchObject();
+
+  MatchObject* prev = mob->previous();
+  const int64_t dprev = prev ? mob->distanceTo(*prev) : std::numeric_limits<int64_t>::max();
+  MatchObject* next = mob->next();
+  const int64_t dnext = next ? mob->distanceTo(*next) : std::numeric_limits<int64_t>::max();
+
+  m_project->removeMatch(mob);
+  mob->deleteLater();
+
+  if (prev || next)
+  {
+    m_matchEditorWidget->setCurrentMatchObject(dprev < dnext ? prev : next);
+  }
+
+  m_project->setModified(true);
+
+  refreshUi();
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
   settings().setValue(WINDOW_GEOM_KEY, saveGeometry());
@@ -376,6 +407,8 @@ void MainWindow::refreshUi()
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);
   m_actions.toggleMatchListWindow->setEnabled(m_project);
   m_actions.toggleMatchListWindow->setChecked(m_matchListWindow && m_matchListWindow->isVisible());
+  m_actions.deleteCurrentMatch->setEnabled(m_matchEditorWidget
+                                           && m_matchEditorWidget->currentMatchObject());
 
   updateWindowTitle();
 }
@@ -432,6 +465,7 @@ void MainWindow::launchMatchEditor()
   if (!m_project->matches().empty())
   {
     m_matchEditorWidget->setCurrentMatchObject(m_project->matches().front());
+    refreshUi();
   }
 }
 
