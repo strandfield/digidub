@@ -613,6 +613,8 @@ public:
   {
     auto* layout = new QVBoxLayout(this);
 
+    layout->addWidget(framesView = new VideoFramesView(player));
+
     if (auto* hlayout = new QHBoxLayout)
     {
       hlayout->addWidget(m_matchDisplay = new QLabel);
@@ -620,8 +622,6 @@ public:
       hlayout->addStretch();
       layout->addLayout(hlayout);
     }
-
-    layout->addWidget(framesView = new VideoFramesView(player));
 
     connect(framesView,
             &VideoFramesView::matchRangeEdited,
