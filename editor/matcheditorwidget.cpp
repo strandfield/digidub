@@ -615,11 +615,7 @@ public:
 
     if (auto* hlayout = new QHBoxLayout)
     {
-      hlayout->addWidget(m_matchStartDisplay = new QLabel);
-      hlayout->addWidget(new QLabel("-"));
-      hlayout->addWidget(m_matchEndDisplay = new QLabel);
-      hlayout->addWidget(new QLabel(" | "));
-      hlayout->addWidget(m_matchDurationDisplay = new QLabel);
+      hlayout->addWidget(m_matchDisplay = new QLabel);
       hlayout->addWidget(m_selectionSizeDisplay = new QLabel);
       hlayout->addStretch();
       layout->addLayout(hlayout);
@@ -636,11 +632,7 @@ public:
             this,
             &MatchEditorItemWidget::onSelectionChanged);
 
-    connect(m_matchStartDisplay,
-            &QLabel::linkActivated,
-            this,
-            &MatchEditorItemWidget::goToMatchStart);
-    connect(m_matchEndDisplay, &QLabel::linkActivated, this, &MatchEditorItemWidget::goToMatchEnd);
+    connect(m_matchDisplay, &QLabel::linkActivated, this, &MatchEditorItemWidget::onLinkActivated);
   }
 
   void setSelection(const TimeSegment& selection)
@@ -653,15 +645,28 @@ public:
 
 public Q_SLOTS:
 
-  void goToMatchStart()
+  void seekMatchStart()
   {
     TimeSegment ts = framesView->model()->selectionAsTimeSegment();
     framesView->videoPlayer().seek(ts.start());
   }
-  void goToMatchEnd()
+
+  void seekMatchEnd()
   {
     TimeSegment ts = framesView->model()->selectionAsTimeSegment();
     framesView->videoPlayer().seek(ts.end());
+  }
+
+  void onLinkActivated(const QString& link)
+  {
+    if (link == "#end")
+    {
+      seekMatchEnd();
+    }
+    else if (link == "#start")
+    {
+      seekMatchStart();
+    }
   }
 
 protected Q_SLOTS:
@@ -693,20 +698,23 @@ protected Q_SLOTS:
 protected:
   void setTimeDisplay(const TimeSegment& ts)
   {
-    m_matchStartDisplay->setText(
-        QString("<a href=\"begin\">%1</a>").arg(Duration(ts.start()).toString(Duration::HHMMSSzzz)));
-    m_matchEndDisplay->setText(
-        QString("<a href=\"end\">%1</a>").arg(Duration(ts.end()).toString(Duration::HHMMSSzzz)));
+    QString text = "";
+    text += QString("<a href=\"#start\">%1</a>")
+                .arg(Duration(ts.start()).toString(Duration::HHMMSSzzz));
+    text += " - ";
+    text += QString("<a href=\"#end\">%1</a>").arg(Duration(ts.end()).toString(Duration::HHMMSSzzz));
 
-    m_matchDurationDisplay->setText(QString::number(ts.duration() / double(1000)));
+    text += QString(" (%1)").arg(QString::number(ts.duration() / double(1000)));
+
+    m_matchDisplay->setText(text);
   }
 
 public:
-  QLabel* m_matchStartDisplay;
-  QLabel* m_matchEndDisplay;
-  QLabel* m_matchDurationDisplay = nullptr;
-  QLabel* m_selectionSizeDisplay;
   VideoFramesView* framesView;
+
+private:
+  QLabel* m_matchDisplay;
+  QLabel* m_selectionSizeDisplay;
 };
 
 MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
