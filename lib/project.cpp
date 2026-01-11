@@ -231,7 +231,6 @@ bool DubbingProject::load(const QString& projectFilePath)
     if (line.startsWith("TITLE "))
     {
       m_projectTitle = QString::fromUtf8(line.mid(6).trimmed());
-      ;
     }
     else if (line.startsWith("VIDEO "))
     {

@@ -104,6 +104,49 @@ void loadAllData(QTextStream& cerr, MediaObject& primaryMedia, MediaObject& seco
 
 } // namespace CreateCommand
 
+static bool likelyVideo(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "mkv" || suffix == "mp4";
+}
+
+static bool likelySubtitle(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "srt" || suffix == "vtt";
+}
+
+static bool likelyProjectFile(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "txt";
+}
+
+static bool isYes(const std::string& text)
+{
+  return text == "y" || text == "yes";
+}
+
+constexpr const char* CMD_CREATE_DESCRIPTION =
+    R"(Creates a project from the given inputs and options.
+If an output file [project.txt] is provided, the result
+is written to that file, otherwise the project file is
+printed to the standard output.
+Input files are provided with `-i` and may be:
+- an existing project file (*.txt)
+- video files (*.mkv,*.mp4)
+- a subtitle file (*.srt)
+If the `--detect-matches` option is passed, the program will
+perform match detection between the two video files.
+The `--title` option may be used to specify a title for the
+project.
+The `--output` option may be used to specify an output file
+path to be used when exporting the project.
+If the `-y` flag is passed, the ouptut `project.txt` will
+be overwritten without warning if it is provided and already
+exists.
+)";
+
 int cmd_create(QStringList args)
 {
   QTextStream cout{stdout};
@@ -111,9 +154,12 @@ int cmd_create(QStringList args)
 
   if (helpRequested(args) || args.isEmpty())
   {
-    cout << "digidub create [--detect-matches] [--title MyTitle] --output out.mkv -i video1.mkv -i "
-            "video2.mkv"
-         << Qt::endl;
+    cout << "COMMAND create" << Qt::endl;
+    cout << Qt::endl;
+    cout << "SYNTAX:" << Qt::endl;
+    cout << "  digidub create [inputs] [options] [project.txt]" << Qt::endl;
+    cout << "DESCRIPTION:" << Qt::endl;
+    cout << CMD_CREATE_DESCRIPTION << Qt::endl;
     return 0;
   }
 
@@ -122,6 +168,7 @@ int cmd_create(QStringList args)
   QStringList inputs;
   QString savepath;
   bool detect_matches = false;
+  bool force = false;
 
   for (int i(0); i < args.size();)
   {
@@ -144,9 +191,13 @@ int cmd_create(QStringList args)
       {
         detect_matches = true;
       }
+      else if (a == "-y")
+      {
+        force = true;
+      }
       else
       {
-        cerr << "Unknown option " << a << Qt::endl;
+        cerr << "Unknown option: " << a << "." << Qt::endl;
         return 1;
       }
     }
@@ -154,7 +205,7 @@ int cmd_create(QStringList args)
     {
       if (!savepath.isEmpty())
       {
-        cerr << "An output filename was already provided" << Qt::endl;
+        cerr << "An output filename was already provided." << Qt::endl;
         return 1;
       }
 
@@ -162,27 +213,66 @@ int cmd_create(QStringList args)
     }
   }
 
-  if (inputs.size() != 2)
+  if (inputs.empty())
   {
-    cerr << "Invalid input count. (must be 2)" << Qt::endl;
+    cerr << "At least one input file must be specified." << Qt::endl;
     return 1;
   }
 
-  project.setVideoFilePath(inputs[0]);
-  project.setAudioSourceFilePath(inputs[1]);
-
-  if (detect_matches)
+  for (const QString& input : inputs)
   {
-    for (int i(0); i < inputs.size(); ++i)
+    QFileInfo info{input};
+    if (!info.exists() && (!detect_matches || likelySubtitle(info)))
     {
-      if (!QFile::exists(inputs[i]))
+      cerr << "Warning: input file " << input << " does not exist." << Qt::endl;
+    }
+
+    if (likelyProjectFile(info))
+    {
+      project.load(input);
+    }
+    else if (likelyVideo(info))
+    {
+      if (project.videoFilePath().isEmpty())
       {
-        cerr << "Input file does not exist " << inputs[i] << Qt::endl;
+        project.setVideoFilePath(input);
+      }
+      else if (project.audioSourceFilePath().isEmpty())
+      {
+        project.setAudioSourceFilePath(input);
+      }
+      else
+      {
+        cerr << "Error: too many video files provided." << Qt::endl;
         return 1;
       }
     }
+    else if (likelySubtitle(info))
+    {
+      project.setSubtitlesFilePath(input);
+    }
+    else
+    {
+      cerr << "Error: unknown input type '" << input << "'." << Qt::endl;
+      return 1;
+    }
+  }
 
-    MediaObject video1{inputs[0]};
+  if (detect_matches)
+  {
+    if (!QFile::exists(project.videoFilePath()))
+    {
+      cerr << "Input file does not exist " << project.videoFilePath() << "." << Qt::endl;
+      return 1;
+    }
+
+    if (!QFile::exists(project.audioSourceFilePath()))
+    {
+      cerr << "Input file does not exist " << project.audioSourceFilePath() << "." << Qt::endl;
+      return 1;
+    }
+
+    MediaObject video1{project.videoFilePath()};
 
     if (project.projectTitle().isEmpty())
     {
@@ -191,7 +281,7 @@ int cmd_create(QStringList args)
         project.setProjectTitle(video1.title());
       }
 
-      MediaObject video2{inputs[1]};
+      MediaObject video2{project.audioSourceFilePath()};
 
       CreateCommand::loadAllData(cerr, video1, video2);
 
@@ -204,13 +294,33 @@ int cmd_create(QStringList args)
 
   if (project.projectTitle().isEmpty())
   {
-    project.setProjectTitle(QFileInfo(inputs[0]).fileName());
+    project.setProjectTitle(QFileInfo(project.videoFilePath()).fileName());
   }
 
   if (!savepath.isEmpty())
   {
     QFile outfile{savepath};
-    outfile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+
+    if (outfile.exists() && !force)
+    {
+      cerr << "Output file already exists. Overwrite [y/N] ? " << Qt::flush;
+      std::string res;
+      std::cin >> res;
+      if (!isYes(res))
+      {
+        cerr << "Aborting." << Qt::endl;
+        return 0;
+      }
+    }
+
+    if (!outfile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+      cerr << "Could not open output file for writing." << Qt::endl;
+      return 1;
+    }
+
+    cerr << "Writing output file " << savepath << Qt::endl;
+
     QTextStream stream{&outfile};
     project.dump(stream);
   }
