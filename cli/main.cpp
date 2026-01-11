@@ -116,6 +116,37 @@ static bool likelySubtitle(const QFileInfo& info)
   return suffix == "srt" || suffix == "vtt";
 }
 
+static bool likelyProjectFile(const QFileInfo& info)
+{
+  const QString suffix = info.suffix().toLower();
+  return suffix == "txt";
+}
+
+static bool isYes(const std::string& text)
+{
+  return text == "y" || text == "yes";
+}
+
+constexpr const char* CMD_CREATE_DESCRIPTION =
+    R"(Creates a project from the given inputs and options.
+If an output file [project.txt] is provided, the result
+is written to that file, otherwise the project file is
+printed to the standard output.
+Input files are provided with `-i` and may be:
+- an existing project file (*.txt)
+- video files (*.mkv,*.mp4)
+- a subtitle file (*.srt)
+If the `--detect-matches` option is passed, the program will
+perform match detection between the two video files.
+The `--title` option may be used to specify a title for the
+project.
+The `--output` option may be used to specify an output file
+path to be used when exporting the project.
+If the `-y` flag is passed, the ouptut `project.txt` will
+be overwritten without warning if it is provided and already
+exists.
+)";
+
 int cmd_create(QStringList args)
 {
   QTextStream cout{stdout};
@@ -123,9 +154,12 @@ int cmd_create(QStringList args)
 
   if (helpRequested(args) || args.isEmpty())
   {
-    cout << "digidub create [--detect-matches] [--title MyTitle] --output out.mkv -i video1.mkv -i "
-            "video2.mkv"
-         << Qt::endl;
+    cout << "COMMAND create" << Qt::endl;
+    cout << Qt::endl;
+    cout << "SYNTAX:" << Qt::endl;
+    cout << "  digidub create [inputs] [options] [project.txt]" << Qt::endl;
+    cout << "DESCRIPTION:" << Qt::endl;
+    cout << CMD_CREATE_DESCRIPTION << Qt::endl;
     return 0;
   }
 
@@ -134,6 +168,7 @@ int cmd_create(QStringList args)
   QStringList inputs;
   QString savepath;
   bool detect_matches = false;
+  bool force = false;
 
   for (int i(0); i < args.size();)
   {
@@ -156,6 +191,10 @@ int cmd_create(QStringList args)
       {
         detect_matches = true;
       }
+      else if (a == "-y")
+      {
+        force = true;
+      }
       else
       {
         cerr << "Unknown option: " << a << "." << Qt::endl;
@@ -174,9 +213,9 @@ int cmd_create(QStringList args)
     }
   }
 
-  if (inputs.size() < 2)
+  if (inputs.empty())
   {
-    cerr << "At least two inputs files must be specified." << Qt::endl;
+    cerr << "At least one input file must be specified." << Qt::endl;
     return 1;
   }
 
@@ -188,7 +227,11 @@ int cmd_create(QStringList args)
       cerr << "Warning: input file " << input << " does not exist." << Qt::endl;
     }
 
-    if (likelyVideo(info))
+    if (likelyProjectFile(info))
+    {
+      project.load(input);
+    }
+    else if (likelyVideo(info))
     {
       if (project.videoFilePath().isEmpty())
       {
@@ -257,7 +300,27 @@ int cmd_create(QStringList args)
   if (!savepath.isEmpty())
   {
     QFile outfile{savepath};
-    outfile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+
+    if (outfile.exists() && !force)
+    {
+      cerr << "Output file already exists. Overwrite [y/N] ? " << Qt::flush;
+      std::string res;
+      std::cin >> res;
+      if (!isYes(res))
+      {
+        cerr << "Aborting." << Qt::endl;
+        return 0;
+      }
+    }
+
+    if (!outfile.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+      cerr << "Could not open output file for writing." << Qt::endl;
+      return 1;
+    }
+
+    cerr << "Writing output file " << savepath << Qt::endl;
+
     QTextStream stream{&outfile};
     project.dump(stream);
   }
