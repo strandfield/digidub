@@ -71,7 +71,6 @@ private:
   VideoPlayerWidget* m_leftPlayer;
   VideoPlayerWidget* m_rightPlayer;
   std::array<MatchEditorItemWidget*, 2> m_items;
-  QPushButton* m_preview_button;
   QPushButton* m_ok_button;
   QPushButton* m_cancel_button;
   QWidget* m_buttonsContainer;

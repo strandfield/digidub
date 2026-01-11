@@ -763,7 +763,6 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
       {
         auto* sublayout = new QHBoxLayout(m_buttonsContainer);
         sublayout->addStretch();
-        sublayout->addWidget(m_preview_button = new QPushButton("Preview"));
         sublayout->addWidget(m_ok_button = new QPushButton("Ok"));
         sublayout->addWidget(m_cancel_button = new QPushButton("Cancel"));
         layout->addWidget(m_buttonsContainer);
@@ -808,7 +807,6 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
               &MatchEditorWidget::onMatchEdited);
     }
 
-    connect(m_preview_button, &QPushButton::clicked, this, &MatchEditorWidget::launchPreview);
     connect(m_ok_button, &QPushButton::clicked, this, &MatchEditorWidget::accept);
     connect(m_cancel_button, &QPushButton::clicked, this, &MatchEditorWidget::cancel);
 
