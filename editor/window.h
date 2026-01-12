@@ -41,6 +41,10 @@ public:
 
   MatchEditorWidget* currentMatchEditorWidget() const;
 
+  void findMatchAfter(MatchObject& matchObject);
+  void findMatchBefore(MatchObject& matchObject);
+  void findMatch(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
+
 public Q_SLOTS:
   void setThumbnailSize(int s);
 
@@ -59,8 +63,6 @@ private Q_SLOTS:
   void refreshUi();
   void updateWindowTitle();
   void launchMatchEditor();
-
-  void onFindMatchRequested(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
 
 private:
   void setupConnectionsTo(DubbingProject* project);

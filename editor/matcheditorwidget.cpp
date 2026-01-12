@@ -1,6 +1,7 @@
 #include "matcheditorwidget.h"
 
 #include "videoplayerwidget.h"
+#include "window.h"
 
 #include "mediaobject.h"
 #include "project.h"
@@ -774,13 +775,24 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
                              0,
                              0,
                              Qt::AlignLeft);
-        sublayout->addWidget(m_navigation.currentMatch = new QLabel(PREVIEW_LINK, this),
+        sublayout->addWidget(m_navigation.insertMatchBefore =
+                                 new QLabel("<a href=\"action:insertBefore\">Insert match</a>",
+                                            this),
                              0,
                              1,
                              Qt::AlignCenter);
-        sublayout->addWidget(m_navigation.nextMatch = new QLabel(NEXT_MATCH_LABEL, this),
+        sublayout->addWidget(m_navigation.currentMatch = new QLabel(PREVIEW_LINK, this),
                              0,
                              2,
+                             Qt::AlignCenter);
+        sublayout->addWidget(m_navigation.insertMatchAfter =
+                                 new QLabel("<a href=\"action:insertAfter\">Insert match</a>", this),
+                             0,
+                             3,
+                             Qt::AlignCenter);
+        sublayout->addWidget(m_navigation.nextMatch = new QLabel(NEXT_MATCH_LABEL, this),
+                             0,
+                             4,
                              Qt::AlignRight);
 
         layout->addLayout(sublayout);
@@ -810,8 +822,13 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
     connect(m_ok_button, &QPushButton::clicked, this, &MatchEditorWidget::accept);
     connect(m_cancel_button, &QPushButton::clicked, this, &MatchEditorWidget::cancel);
 
-    for (QLabel* label :
-         {m_navigation.previousMatch, m_navigation.currentMatch, m_navigation.nextMatch})
+    const std::vector<QLabel*> labels{m_navigation.previousMatch,
+                                      m_navigation.currentMatch,
+                                      m_navigation.nextMatch,
+                                      m_navigation.insertMatchBefore,
+                                      m_navigation.insertMatchAfter};
+
+    for (QLabel* label : labels)
     {
       connect(label, &QLabel::linkActivated, this, &MatchEditorWidget::onLinkActivated);
     }
@@ -858,10 +875,13 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
         const auto d = mob->distanceTo(*prev);
         m_navigation.previousMatch->setText(PREVIOUS_MATCH_LINK
                                             + QString(" (%1s)").arg(QString::number(d / 1000.)));
+
+        m_navigation.insertMatchBefore->setEnabled(d > 2000);
       }
       else
       {
         m_navigation.previousMatch->setText(PREVIOUS_MATCH_LABEL);
+        m_navigation.insertMatchBefore->setEnabled(mob->value().a.start() > 2000);
       }
 
       if (MatchObject* next = mob->next())
@@ -869,10 +889,13 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
         const auto d = mob->distanceTo(*next);
         m_navigation.nextMatch->setText(QString("(%1s) ").arg(QString::number(d / 1000.))
                                         + NEXT_MATCH_LINK);
+
+        m_navigation.insertMatchAfter->setEnabled(d > 2000);
       }
       else
       {
         m_navigation.nextMatch->setText(NEXT_MATCH_LABEL);
+        m_navigation.insertMatchAfter->setEnabled(m_video1.duration() - mob->value().a.end() > 2000);
       }
 
       m_buttonsContainer->setEnabled(true);
@@ -1064,6 +1087,22 @@ void MatchEditorWidget::onLinkActivated(const QString& link)
     if (m_editedMatchObject)
     {
       setCurrentMatchObject(m_editedMatchObject->previous());
+    }
+  }
+  else if (link == "action:insertBefore")
+  {
+    assert(m_editedMatchObject);
+    if (m_editedMatchObject)
+    {
+      qobject_cast<MainWindow*>(window())->findMatchBefore(*m_editedMatchObject);
+    }
+  }
+  else if (link == "action:insertAfter")
+  {
+    assert(m_editedMatchObject);
+    if (m_editedMatchObject)
+    {
+      qobject_cast<MainWindow*>(window())->findMatchAfter(*m_editedMatchObject);
     }
   }
   else

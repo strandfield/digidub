@@ -210,7 +210,7 @@ void MainWindow::openFile(const QString& filePath)
     qDebug() << "Unknown file type";
   }
 
-  m_matchListWindow = new MatchListWindow(*m_project, this);
+  m_matchListWindow = new MatchListWindow(*m_project, *this, this);
   //m_matchListWindow->show();
 
   connect(m_matchListWindow,
@@ -226,11 +226,6 @@ void MainWindow::openFile(const QString& filePath)
       refreshUi();
     }
   });
-
-  connect(m_matchListWindow,
-          &MatchListWindow::findMatchRequested,
-          this,
-          &MainWindow::onFindMatchRequested);
 
   refreshUi();
 }
@@ -459,8 +454,6 @@ void MainWindow::launchMatchEditor()
           this,
           &MainWindow::onMatchEditingFinished);
 
-  m_matchListWindow->setVideoDuration(m_primaryMedia->duration() * 1000);
-
   m_project->sortMatches();
   if (!m_project->matches().empty())
   {
@@ -482,8 +475,69 @@ void MainWindow::updateLastSaveDir(const QString& filePath)
   }
 }
 
-void MainWindow::onFindMatchRequested(const TimeSegment& withinSegment,
-                                      const TimeSegment& defaultResult)
+void MainWindow::findMatchAfter(MatchObject& matchObject)
+{
+  MatchObject* next_match = nullptr;
+  {
+    std::vector<MatchObject*> matches = m_project->matches();
+    ::sort(matches);
+
+    auto it = std::find(matches.begin(), matches.end(), &matchObject);
+    Q_ASSERT(it != matches.end());
+    it = std::next(it);
+    if (it != matches.end())
+    {
+      next_match = *it;
+    }
+  }
+
+  const int64_t start = matchObject.value().a.end();
+  int64_t end = 0;
+  if (next_match)
+  {
+    end = next_match->value().a.start();
+  }
+  else
+  {
+    end = m_primaryMedia->duration() * 1000;
+  }
+
+  const auto srcsegment = TimeSegment(start, end);
+  findMatch(srcsegment,
+            TimeSegment(matchObject.value().b.end(),
+                        matchObject.value().b.end() + srcsegment.duration()));
+}
+
+void MainWindow::findMatchBefore(MatchObject& matchObject)
+{
+  MatchObject* prev_match = nullptr;
+  {
+    std::vector<MatchObject*> matches = m_project->matches();
+    ::sort(matches);
+
+    auto it = std::find(matches.begin(), matches.end(), &matchObject);
+    Q_ASSERT(it != matches.end());
+    if (it != matches.begin())
+    {
+      prev_match = *std::prev(it);
+    }
+  }
+
+  const int64_t end = matchObject.value().a.start();
+
+  int64_t start = 0;
+  if (prev_match)
+  {
+    start = prev_match->value().a.end();
+  }
+
+  const auto srcsegment = TimeSegment(start, end);
+  findMatch(srcsegment,
+            TimeSegment(matchObject.value().b.start() - srcsegment.duration(),
+                        srcsegment.duration()));
+}
+
+void MainWindow::findMatch(const TimeSegment& withinSegment, const TimeSegment& defaultResult)
 {
   QProgressDialog progress{"", "Cancel", 0, 4};
   QEventLoop loop;
@@ -579,6 +633,8 @@ void MainWindow::onFindMatchRequested(const TimeSegment& withinSegment,
   MatchObject* obj = m_project->createMatch(match);
   m_project->addMatch(obj);
   m_project->setModified();
+
+  m_matchEditorWidget->setCurrentMatchObject(obj);
 }
 
 void MainWindow::debugProc()

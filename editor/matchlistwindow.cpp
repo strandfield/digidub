@@ -1,5 +1,7 @@
 #include "matchlistwindow.h"
 
+#include "window.h"
+
 #include "mediaobject.h"
 #include "project.h"
 
@@ -18,9 +20,10 @@
 
 #include <algorithm>
 
-MatchListWindow::MatchListWindow(DubbingProject& project, QWidget* parent)
+MatchListWindow::MatchListWindow(DubbingProject& project, MainWindow& window, QWidget* parent)
     : QWidget(parent, Qt::Tool)
     , m_project(project)
+    , m_window(window)
 {
   setWindowTitle("Match list");
 
@@ -54,11 +57,6 @@ MatchListWindow::~MatchListWindow() {}
 DubbingProject& MatchListWindow::project() const
 {
   return m_project;
-}
-
-void MatchListWindow::setVideoDuration(int64_t msecs)
-{
-  m_videoDuration = msecs;
 }
 
 static MatchObject* getMatchObject(const QTreeWidgetItem* item)
@@ -138,11 +136,11 @@ bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
       {
         if (kev->key() == Qt::Key_Up)
         {
-          findMatchBefore(*mob);
+          m_window.findMatchBefore(*mob);
         }
         else
         {
-          findMatchAfter(*mob);
+          m_window.findMatchAfter(*mob);
         }
 
         return true;
@@ -201,71 +199,4 @@ MatchObject* MatchListWindow::getSelectedMatchObject() const
 {
   QTreeWidgetItem* selected = m_matchListWidget->currentItem();
   return getMatchObject(selected);
-}
-
-void MatchListWindow::findMatchAfter(MatchObject& matchObject)
-{
-  MatchObject* next_match = nullptr;
-  {
-    std::vector<MatchObject*> matches = m_project.matches();
-    ::sort(matches);
-
-    auto it = std::find(matches.begin(), matches.end(), &matchObject);
-    Q_ASSERT(it != matches.end());
-    it = std::next(it);
-    if (it != matches.end())
-    {
-      next_match = *it;
-    }
-  }
-
-  const int64_t start = matchObject.value().a.end();
-  int64_t end = 0;
-  if (next_match)
-  {
-    end = next_match->value().a.start();
-  }
-  else
-  {
-    if (!m_videoDuration)
-    {
-      return;
-    }
-
-    end = m_videoDuration;
-  }
-
-  const auto srcsegment = TimeSegment(start, end);
-  Q_EMIT findMatchRequested(srcsegment,
-                            TimeSegment(matchObject.value().b.end(),
-                                        matchObject.value().b.end() + srcsegment.duration()));
-}
-
-void MatchListWindow::findMatchBefore(MatchObject& matchObject)
-{
-  MatchObject* prev_match = nullptr;
-  {
-    std::vector<MatchObject*> matches = m_project.matches();
-    ::sort(matches);
-
-    auto it = std::find(matches.begin(), matches.end(), &matchObject);
-    Q_ASSERT(it != matches.end());
-    if (it != matches.begin())
-    {
-      prev_match = *std::prev(it);
-    }
-  }
-
-  const int64_t end = matchObject.value().a.start();
-
-  int64_t start = 0;
-  if (prev_match)
-  {
-    start = prev_match->value().a.end();
-  }
-
-  const auto srcsegment = TimeSegment(start, end);
-  Q_EMIT findMatchRequested(srcsegment,
-                            TimeSegment(matchObject.value().b.start() - srcsegment.duration(),
-                                        srcsegment.duration()));
 }

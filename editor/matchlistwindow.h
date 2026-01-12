@@ -16,21 +16,21 @@ class MatchObject;
 
 class MediaObject;
 
+class MainWindow;
+
 // TODO: add a right-click menu ?
 class MatchListWindow : public QWidget
 {
   Q_OBJECT
 public:
-  explicit MatchListWindow(DubbingProject& project, QWidget* parent = nullptr);
+  MatchListWindow(DubbingProject& project, MainWindow& window, QWidget* parent = nullptr);
   ~MatchListWindow();
 
   DubbingProject& project() const;
-  void setVideoDuration(int64_t msecs);
 
 Q_SIGNALS:
   void closed();
   void matchDoubleClicked(MatchObject* mob);
-  void findMatchRequested(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
 
 protected Q_SLOTS:
   void onItemDoubleClicked(QTreeWidgetItem* item);
@@ -51,12 +51,9 @@ private:
   void fill(QTreeWidgetItem* item, MatchObject* mob);
   MatchObject* getSelectedMatchObject() const;
 
-  void findMatchAfter(MatchObject& matchObject);
-  void findMatchBefore(MatchObject& matchObject);
-
 private:
   DubbingProject& m_project;
+  MainWindow& m_window;
   QTreeWidget* m_matchListWidget;
-  int64_t m_videoDuration = 0;
 };
 

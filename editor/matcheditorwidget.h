@@ -77,7 +77,9 @@ private:
   struct
   {
     QLabel* previousMatch;
+    QLabel* insertMatchBefore;
     QLabel* currentMatch;
+    QLabel* insertMatchAfter;
     QLabel* nextMatch;
   } m_navigation;
   MatchObject* m_editedMatchObject = nullptr;
