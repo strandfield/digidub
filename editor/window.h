@@ -10,6 +10,7 @@
 #include <QMainWindow>
 
 class QSettings;
+class QUndoStack;
 
 class QLabel;
 class QLineEdit;
@@ -33,6 +34,7 @@ public:
   ~MainWindow();
 
   QSettings& settings() const;
+  QUndoStack& undoStack() const;
 
   QString getLastOpenDir() const;
   void updateLastOpenDir(const QString& path);
@@ -60,13 +62,11 @@ protected:
   void closeEvent(QCloseEvent* event) override;
 
 private Q_SLOTS:
-  void onMatchEditingFinished(bool accepted);
   void refreshUi();
   void updateWindowTitle();
   void launchMatchEditor();
 
 private:
-  void setupConnectionsTo(DubbingProject* project);
   void updateLastSaveDir(const QString& filePath);
 
 private Q_SLOTS:
@@ -74,6 +74,7 @@ private Q_SLOTS:
 
 private:
   QSettings* m_settings = nullptr;
+  QUndoStack* m_undoStack = nullptr;
   DubbingProject* m_project = nullptr;
   MediaObject* m_primaryMedia = nullptr;
   MediaObject* m_secondaryMedia = nullptr;

@@ -5,6 +5,9 @@
 #include <QFileInfo>
 #include <QTextStream>
 
+#include <algorithm>
+#include <set>
+
 MatchObject::MatchObject(const QString& text, QObject* parent)
     : QObject(parent)
 {
@@ -28,66 +31,14 @@ DubbingProject* MatchObject::project() const
   return qobject_cast<DubbingProject*>(parent());
 }
 
-namespace {
-static constexpr uint64_t maxdist = std::numeric_limits<uint64_t>::max();
-
-uint64_t distbefore(const MatchObject& target, const MatchObject& source)
-{
-  if (target.value().a.end() <= source.value().a.start())
-  {
-    return source.value().a.start() - target.value().a.end();
-  }
-
-  return maxdist;
-}
-
-uint64_t distafter(const MatchObject& target, const MatchObject& source)
-{
-  if (target.value().a.start() >= source.value().a.end())
-  {
-    return target.value().a.start() - source.value().a.end();
-  }
-
-  return maxdist;
-}
-} // namespace
-
 MatchObject* MatchObject::previous() const
 {
-  DubbingProject* p = project();
-  if (!p)
-  {
-    return nullptr;
-  }
-
-  const std::vector<MatchObject*>& ms = p->matches();
-
-  auto it = std::min_element(ms.begin(),
-                             ms.end(),
-                             [this](const MatchObject* a, const MatchObject* b) {
-                               return distbefore(*a, *this) < distbefore(*b, *this);
-                             });
-
-  return (it != ms.end() && (distbefore(**it, *this) != maxdist)) ? *it : nullptr;
+  return m_previous;
 }
 
 MatchObject* MatchObject::next() const
 {
-  DubbingProject* p = project();
-  if (!p)
-  {
-    return nullptr;
-  }
-
-  const std::vector<MatchObject*>& ms = p->matches();
-
-  auto it = std::min_element(ms.begin(),
-                             ms.end(),
-                             [this](const MatchObject* a, const MatchObject* b) {
-                               return distafter(*a, *this) < distafter(*b, *this);
-                             });
-
-  return (it != ms.end() && (distafter(**it, *this) != maxdist)) ? *it : nullptr;
+  return m_next;
 }
 
 int64_t MatchObject::distanceTo(const MatchObject& other) const
@@ -121,6 +72,30 @@ QString MatchObject::toString() const
   return value().a.toString() + "~" + value().b.toString();
 }
 
+bool MatchObject::active() const
+{
+  return m_active;
+}
+
+void MatchObject::setActive(bool active)
+{
+  if (m_active != active)
+  {
+    m_active = active;
+    Q_EMIT activeChanged();
+
+    if (!m_active)
+    {
+      Q_EMIT deleted();
+    }
+  }
+}
+
+void MatchObject::setDeleted(bool deleted)
+{
+  setActive(!deleted);
+}
+
 void sort(std::vector<MatchObject*>& matches)
 {
   std::sort(matches.begin(), matches.end(), [](const MatchObject* a, const MatchObject* b) {
@@ -128,7 +103,7 @@ void sort(std::vector<MatchObject*>& matches)
   });
 }
 
-std::vector<VideoMatch> convert2vm(const std::vector<MatchObject*>& matches)
+std::vector<VideoMatch> convert2vm(const std::vector<MatchObject*>& matches, bool isSorted)
 {
   std::vector<VideoMatch> result;
   result.reserve(matches.size());
@@ -137,9 +112,12 @@ std::vector<VideoMatch> convert2vm(const std::vector<MatchObject*>& matches)
     result.push_back(m->value());
   }
 
-  std::sort(result.begin(), result.end(), [](const VideoMatch& a, const VideoMatch& b) {
-    return a.a.start() < b.a.start();
-  });
+  if (!isSorted)
+  {
+    std::sort(result.begin(), result.end(), [](const VideoMatch& a, const VideoMatch& b) {
+      return a.a.start() < b.a.start();
+    });
+  }
 
   return result;
 }
@@ -159,9 +137,6 @@ DubbingProject::DubbingProject(const QString& filePathOrTitle, QObject* parent)
   {
     m_projectTitle = filePathOrTitle;
   }
-
-  Q_ASSERT(!modified());
-  m_modified = false;
 }
 
 DubbingProject::DubbingProject(const QString& videoPath, const QString& audioPath, QObject* parent)
@@ -367,6 +342,26 @@ bool DubbingProject::load(const QString& projectFilePath)
     }
   }
 
+  if (!m_matches.empty())
+  {
+    ::sort(m_matches);
+
+    MatchObject* previous = nullptr;
+    for (MatchObject* current : m_matches)
+    {
+      current->setActive(true);
+
+      if (previous)
+      {
+        previous->m_next = current;
+      }
+
+      current->m_previous = previous;
+
+      previous = current;
+    }
+  }
+
   if (std::exchange(m_projectFilePath, projectFilePath) != projectFilePath)
   {
     Q_EMIT projectFilePathChanged();
@@ -389,8 +384,7 @@ void DubbingProject::save(const QString& path)
 
 void DubbingProject::dump(QTextStream& stream)
 {
-  std::vector<MatchObject*> ms = matches();
-  sort(ms);
+  const std::vector<MatchObject*>& ms = matches();
 
   stream << "DIGIDUB PROJECT\n";
   stream << "VERSION 1\n";
@@ -490,31 +484,116 @@ QString DubbingProject::resolvePath(const QString& filePath) const
 
 MatchObject* DubbingProject::createMatch(const VideoMatch& val)
 {
-  return new MatchObject(val, this);
+  auto* result = new MatchObject(val, this);
+  setupConnectionsTo(result);
+  return result;
 }
 
 void DubbingProject::addMatch(MatchObject* match)
 {
-  assert(std::find(m_matches.begin(), m_matches.end(), match) == m_matches.end());
+  Q_ASSERT(std::find(m_matches.begin(), m_matches.end(), match) == m_matches.end());
 
-  m_matches.push_back(match);
-  setupConnectionsTo(match);
+  auto it = std::upper_bound(m_matches.begin(),
+                             m_matches.end(),
+                             match,
+                             [](MatchObject* a, MatchObject* b) {
+                               return a->value().a.start() < b->value().a.start();
+                             });
+
+  MatchObject* next = nullptr;
+  MatchObject* previous = nullptr;
+
+  if (it != m_matches.end())
+  {
+    next = *it;
+  }
+
+  if (it != m_matches.begin())
+  {
+    previous = *std::prev(it);
+  }
+
+  m_matches.insert(it, match);
+
+  if (next)
+  {
+    next->m_previous = match;
+    match->m_next = next;
+  }
+
+  if (previous)
+  {
+    previous->m_next = match;
+    match->m_previous = previous;
+  }
+
+  match->setDeleted(false);
 
   Q_EMIT matchAdded(match);
+
+  if (next)
+  {
+    Q_EMIT match->nextChanged();
+    Q_EMIT next->previousChanged();
+  }
+
+  if (previous)
+  {
+    Q_EMIT match->previousChanged();
+    Q_EMIT previous->nextChanged();
+  }
 }
 
 void DubbingProject::removeMatch(MatchObject* match)
 {
-  auto it = std::find(m_matches.begin(), m_matches.end(), match);
-  if (it != m_matches.end())
+  if (match->project() != this)
   {
-    disconnect(match, &MatchObject::changed, this, &DubbingProject::onMatchChanged);
+    Q_ASSERT(false && "trying to remove match from another DubbingProject");
+    return;
+  }
 
-    m_matches.erase(it);
-    Q_EMIT matchRemoved(match);
+  if (!match->active())
+  {
+    qDebug() << "trying to remove match, but it is already inactive: " << match;
+    return;
+  }
+
+  auto it = std::find(m_matches.begin(), m_matches.end(), match);
+
+  MatchObject* prev = match->previous();
+  MatchObject* next = match->next();
+
+  if (prev)
+  {
+    prev->m_next = next;
+  }
+
+  if (next)
+  {
+    next->m_previous = prev;
+  }
+
+  match->m_previous = nullptr;
+  match->m_next = nullptr;
+
+  m_matches.erase(it);
+  match->setDeleted();
+  Q_EMIT matchRemoved(match);
+
+  if (prev)
+  {
+    Q_EMIT match->previousChanged();
+    Q_EMIT prev->nextChanged();
+  }
+
+  if (next)
+  {
+    Q_EMIT match->nextChanged();
+    Q_EMIT next->previousChanged();
   }
 }
 
+// Returns the sorted list of match objects that are active.
 const std::vector<MatchObject*>& DubbingProject::matches() const
 {
   return m_matches;
@@ -529,31 +608,79 @@ void DubbingProject::addMatches(const std::vector<VideoMatch>& values)
   }
 }
 
-void DubbingProject::sortMatches()
+std::vector<MatchObject*> DubbingProject::matchObjects() const
 {
-  sort(m_matches);
-}
-
-bool DubbingProject::modified() const
-{
-  return m_modified;
-}
-
-void DubbingProject::setModified(bool modified)
-{
-  if (modified != m_modified)
-  {
-    m_modified = modified;
-    Q_EMIT modifiedChanged();
-  }
+  const QList<MatchObject*> list = findChildren<MatchObject*>();
+  return std::vector<MatchObject*>(list.begin(), list.end());
 }
 
 void DubbingProject::onMatchChanged()
 {
-  auto* m = qobject_cast<MatchObject*>(sender());
-  if (m)
+  auto* const m = qobject_cast<MatchObject*>(sender());
+  if (!m)
+  {
+    return;
+  }
+
+  Q_ASSERT(m->project() == this);
+
+  const bool next_is_okay = !m->next() || m->next()->value().a.start() > m->value().a.start();
+  const bool prev_is_okay = !m->previous()
+                            || m->previous()->value().a.start() < m->value().a.start();
+
+  if (next_is_okay && prev_is_okay)
   {
     Q_EMIT matchChanged(m);
+    return;
+  }
+
+  std::set<MatchObject*> nextchanged, prevchanged;
+
+  ::sort(m_matches);
+
+  if (m_matches.front()->previous())
+  {
+    m_matches.front()->m_previous = nullptr;
+    prevchanged.insert(m_matches.front());
+  }
+
+  if (m_matches.back()->next())
+  {
+    m_matches.back()->m_next = nullptr;
+    nextchanged.insert(m_matches.back());
+  }
+
+  MatchObject* previous = nullptr;
+  for (MatchObject* current : m_matches)
+  {
+    if (previous)
+    {
+      if (previous->m_next != current)
+      {
+        previous->m_next = current;
+        nextchanged.insert(previous);
+      }
+    }
+
+    if (current->m_previous != previous)
+    {
+      current->m_previous = previous;
+      prevchanged.insert(current);
+    }
+
+    previous = current;
+  }
+
+  Q_EMIT matchChanged(m);
+
+  for (MatchObject* match : prevchanged)
+  {
+    Q_EMIT match->previousChanged();
+  }
+
+  for (MatchObject* match : nextchanged)
+  {
+    Q_EMIT match->nextChanged();
   }
 }
 

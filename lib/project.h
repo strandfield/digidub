@@ -32,11 +32,10 @@ class DubbingProject;
 class MatchObject : public QObject
 {
   Q_OBJECT
+  Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
 public:
   explicit MatchObject(const QString& text, QObject* parent = nullptr);
   explicit MatchObject(const VideoMatch& val, QObject* parent = nullptr);
-
-  int id() const;
 
   DubbingProject* project() const;
   MatchObject* previous() const;
@@ -48,15 +47,29 @@ public:
 
   QString toString() const;
 
+  bool active() const;
+  void setActive(bool active);
+  void setDeleted(bool deleted = true);
+
 Q_SIGNALS:
   void changed();
+  void activeChanged();
+  void deleted();
+  void previousChanged();
+  void nextChanged();
+
+private:
+  friend class DubbingProject;
 
 private:
   VideoMatch m_value;
+  bool m_active = false;
+  MatchObject* m_previous = nullptr;
+  MatchObject* m_next = nullptr;
 };
 
 void sort(std::vector<MatchObject*>& matches);
-std::vector<VideoMatch> convert2vm(const std::vector<MatchObject*>& matches);
+std::vector<VideoMatch> convert2vm(const std::vector<MatchObject*>& matches, bool isSorted = false);
 
 class DubbingProject : public QObject
 {
@@ -65,7 +78,6 @@ class DubbingProject : public QObject
   Q_PROPERTY(QString projectTitle READ projectTitle WRITE setProjectTitle NOTIFY projectTitleChanged)
   Q_PROPERTY(
       QString outputFilePath READ outputFilePath WRITE setOutputFilePath NOTIFY projectTitleChanged)
-  Q_PROPERTY(bool modified READ modified WRITE setModified NOTIFY modifiedChanged)
 public:
   explicit DubbingProject(QObject* parent = nullptr);
   explicit DubbingProject(const QString& filePathOrTitle, QObject* parent = nullptr);
@@ -101,11 +113,7 @@ public:
   void removeMatch(MatchObject* match);
   const std::vector<MatchObject*>& matches() const;
   void addMatches(const std::vector<VideoMatch>& values);
-
-  void sortMatches();
-
-  bool modified() const;
-  void setModified(bool modified = true);
+  std::vector<MatchObject*> matchObjects() const;
 
 Q_SIGNALS:
   void projectFilePathChanged();
@@ -115,7 +123,6 @@ Q_SIGNALS:
   void matchAdded(MatchObject* match);
   void matchRemoved(MatchObject* match);
   void matchChanged(MatchObject* match);
-  void modifiedChanged();
 
 protected Q_SLOTS:
   void onMatchChanged();
@@ -131,7 +138,6 @@ private:
   QString m_subtitlesFilePath;
   QString m_outputFilePath;
   std::vector<MatchObject*> m_matches;
-  bool m_modified = false;
 };
 
 #endif // PROJECT_H

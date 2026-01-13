@@ -1,5 +1,6 @@
 #include "matchlistwindow.h"
 
+#include "commands.h"
 #include "window.h"
 
 #include "mediaobject.h"
@@ -12,6 +13,7 @@
 
 #include <QStringList>
 #include <QTime>
+#include <QUndoStack>
 #include <QVariant>
 
 #include <QKeyEvent>
@@ -122,8 +124,7 @@ bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
       MatchObject* mob = getSelectedMatchObject();
       if (mob)
       {
-        m_project.removeMatch(mob);
-        mob->deleteLater();
+        m_window.undoStack().push(new RemoveMatch(*mob, m_project));
         return true;
       }
     }
@@ -168,8 +169,7 @@ void MatchListWindow::resetMatchList()
 {
   m_matchListWidget->clear();
 
-  std::vector<MatchObject*> matches = m_project.matches();
-  ::sort(matches);
+  const std::vector<MatchObject*>& matches = m_project.matches();
 
   for (MatchObject* m : matches)
   {

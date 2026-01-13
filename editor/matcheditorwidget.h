@@ -38,27 +38,19 @@ public:
   VideoPlayerWidget* playerLeft() const;
   VideoPlayerWidget* playerRight() const;
 
-  bool isEditingMatchObject() const;
   void setCurrentMatchObject(MatchObject* mob);
   MatchObject* currentMatchObject() const;
   void reset();
-
-  const VideoMatch& originalMatch() const;
-  const VideoMatch& editedMatch() const;
 
   void clearCache();
 
 public Q_SLOTS:
   void launchPreview();
-  void accept();
-  void cancel();
-
-Q_SIGNALS:
-  void editionFinished(bool accepted);
 
 protected Q_SLOTS:
   void onLinkActivated(const QString& link);
-  void onMatchEdited();
+  void onAnyFrameRangeEdited();
+  void onMatchObjectChanged();
 
 private:
   QTemporaryDir& getTempDir();
@@ -71,9 +63,6 @@ private:
   VideoPlayerWidget* m_leftPlayer;
   VideoPlayerWidget* m_rightPlayer;
   std::array<MatchEditorItemWidget*, 2> m_items;
-  QPushButton* m_ok_button;
-  QPushButton* m_cancel_button;
-  QWidget* m_buttonsContainer;
   struct
   {
     QLabel* previousMatch;
@@ -81,8 +70,6 @@ private:
     QLabel* nextMatch;
   } m_navigation;
   MatchObject* m_editedMatchObject = nullptr;
-  VideoMatch m_original_match;
-  VideoMatch m_edited_match;
   std::unique_ptr<QTemporaryDir> m_tempDir;
 };
 

@@ -1,5 +1,6 @@
 #include "matcheditorwidget.h"
 
+#include "commands.h"
 #include "videoplayerwidget.h"
 #include "window.h"
 
@@ -34,6 +35,7 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QTimer>
+#include <QUndoStack>
 #include <QUrl>
 
 #include <QDebug>
@@ -443,6 +445,11 @@ public:
 
       setContextMenuPolicy(Qt::ActionsContextMenu);
     }
+
+    connect(&m_player,
+            &VideoPlayerWidget::currentPausedImageChanged,
+            this,
+            &VideoFramesView::scrollToCurrentImage);
   }
 
   void addFindMatchAction()
@@ -463,20 +470,11 @@ public:
   // anything foolishly.
   VideoFramesModel* model() const { return static_cast<VideoFramesModel*>(QListView::model()); }
 
-  // TODO: rename to setSelection?
-  void setup(const TimeSegment& selection)
+  void setSelection(const TimeSegment& selection)
   {
     Q_ASSERT(m_player.media()->framesInfo());
 
-    m_player.seek(selection.start());
     model()->setSelection(selection);
-
-    scrollToFrameRange();
-
-    connect(&m_player,
-            &VideoPlayerWidget::currentPausedImageChanged,
-            this,
-            &VideoFramesView::scrollToCurrentImage);
   }
 
   void resetModel() { model()->setSelection(TimeSegment()); }
@@ -491,18 +489,6 @@ Q_SIGNALS:
   void matchRangeEdited();
 
 public Q_SLOTS:
-  void scrollToFrameRange()
-  {
-    const std::pair<int, int> range = model()->selectionAsFrameRange();
-
-    if (range.second == -1)
-    {
-      return;
-    }
-
-    scrollTo(model()->index(range.first));
-  }
-
   void scrollToCurrentImage()
   {
     int64_t pos = m_player.position();
@@ -673,7 +659,20 @@ public:
   void setSelection(const TimeSegment& selection)
   {
     setTimeDisplay(selection);
-    framesView->setup(selection);
+    framesView->setSelection(selection);
+
+    // seek player if needed
+    {
+      int64_t pp = framesView->videoPlayer().position();
+      if (pp < selection.start())
+      {
+        framesView->videoPlayer().seek(selection.start());
+      }
+      else if (pp > selection.end())
+      {
+        framesView->videoPlayer().seek(selection.end());
+      }
+    }
   }
 
   void reset() { framesView->resetModel(); }
@@ -793,15 +792,6 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
     auto* container = new QWidget;
     if (auto* layout = new QVBoxLayout(container))
     {
-      if (m_buttonsContainer = new QWidget)
-      {
-        auto* sublayout = new QHBoxLayout(m_buttonsContainer);
-        sublayout->addStretch();
-        sublayout->addWidget(m_ok_button = new QPushButton("Ok"));
-        sublayout->addWidget(m_cancel_button = new QPushButton("Cancel"));
-        layout->addWidget(m_buttonsContainer);
-      }
-
       if (auto* sublayout = new QGridLayout())
       {
         sublayout->addWidget(m_navigation.previousMatch = new QLabel(PREVIOUS_MATCH_LABEL, this),
@@ -840,11 +830,8 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
       connect(w->framesView,
               &VideoFramesView::matchRangeEdited,
               this,
-              &MatchEditorWidget::onMatchEdited);
+              &MatchEditorWidget::onAnyFrameRangeEdited);
     }
-
-    connect(m_ok_button, &QPushButton::clicked, this, &MatchEditorWidget::accept);
-    connect(m_cancel_button, &QPushButton::clicked, this, &MatchEditorWidget::cancel);
 
     const std::vector<QLabel*> labels{m_navigation.previousMatch,
                                       m_navigation.currentMatch,
@@ -857,8 +844,6 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
   }
 
   refreshUi();
-
-  m_buttonsContainer->setEnabled(false);
 }
 
 MatchEditorWidget::~MatchEditorWidget()
@@ -878,72 +863,40 @@ VideoPlayerWidget* MatchEditorWidget::playerRight() const
 
 void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
 {
-  if (currentMatchObject() != mob)
+  if (currentMatchObject() == mob)
   {
-    m_editedMatchObject = mob;
-
-    if (mob)
-    {
-      m_original_match = mob->value();
-      m_edited_match = m_original_match;
-
-      m_items[0]->setSelection(m_original_match.a);
-      m_items[1]->setSelection(m_original_match.b);
-
-      //m_navigation.currentMatch->setText(mob->toString());
-
-      if (MatchObject* prev = mob->previous())
-      {
-        const auto d = mob->distanceTo(*prev);
-        m_navigation.previousMatch->setText(PREVIOUS_MATCH_LINK
-                                            + QString(" (%1s)").arg(QString::number(d / 1000.)));
-      }
-      else
-      {
-        m_navigation.previousMatch->setText(PREVIOUS_MATCH_LABEL);
-      }
-
-      if (MatchObject* next = mob->next())
-      {
-        const auto d = mob->distanceTo(*next);
-        m_navigation.nextMatch->setText(QString("(%1s) ").arg(QString::number(d / 1000.))
-                                        + NEXT_MATCH_LINK);
-      }
-      else
-      {
-        m_navigation.nextMatch->setText(NEXT_MATCH_LABEL);
-      }
-
-      m_buttonsContainer->setEnabled(true);
-    }
-
-    refreshUi();
+    return;
   }
-}
 
-bool MatchEditorWidget::isEditingMatchObject() const
-{
-  return currentMatchObject() != nullptr;
+  if (m_editedMatchObject)
+  {
+    disconnect(m_editedMatchObject, nullptr, this, nullptr);
+    m_editedMatchObject = nullptr;
+  }
+
+  m_editedMatchObject = mob;
+
+  if (!mob)
+  {
+    refreshUi();
+    return;
+  }
+
+  connect(mob, &MatchObject::changed, this, &MatchEditorWidget::onMatchObjectChanged);
+  connect(mob, &MatchObject::previousChanged, this, &MatchEditorWidget::onMatchObjectChanged);
+  connect(mob, &MatchObject::nextChanged, this, &MatchEditorWidget::onMatchObjectChanged);
+
+  onMatchObjectChanged();
+
+  refreshUi();
 }
 
 void MatchEditorWidget::reset()
 {
   m_items[0]->reset();
   m_items[1]->reset();
-  m_original_match = m_edited_match = VideoMatch();
   m_tempDir.reset();
   refreshUi();
-  m_buttonsContainer->setEnabled(false);
-}
-
-const VideoMatch& MatchEditorWidget::originalMatch() const
-{
-  return m_original_match;
-}
-
-const VideoMatch& MatchEditorWidget::editedMatch() const
-{
-  return m_edited_match;
 }
 
 void MatchEditorWidget::clearCache()
@@ -1066,23 +1019,6 @@ void MatchEditorWidget::launchPreview()
   QDesktopServices::openUrl(QUrl::fromLocalFile(previewpath));
 }
 
-void MatchEditorWidget::accept()
-{
-  const bool match_modified = m_original_match != m_edited_match;
-
-  if (!match_modified)
-  {
-    return cancel();
-  }
-
-  Q_EMIT editionFinished(true);
-}
-
-void MatchEditorWidget::cancel()
-{
-  Q_EMIT editionFinished(false);
-}
-
 void MatchEditorWidget::onLinkActivated(const QString& link)
 {
   if (link == "action:preview")
@@ -1111,11 +1047,58 @@ void MatchEditorWidget::onLinkActivated(const QString& link)
   }
 }
 
-void MatchEditorWidget::onMatchEdited()
+void MatchEditorWidget::onAnyFrameRangeEdited()
 {
-  m_edited_match.a = m_items[0]->framesView->matchRange();
-  m_edited_match.b = m_items[1]->framesView->matchRange();
-  refreshUi();
+  VideoMatch m;
+  m.a = m_items[0]->framesView->matchRange();
+  m.b = m_items[1]->framesView->matchRange();
+
+  auto* w = qobject_cast<MainWindow*>(window());
+  if (w && currentMatchObject())
+  {
+    w->undoStack().push(new EditMatch(*currentMatchObject(), m));
+  }
+}
+
+void MatchEditorWidget::onMatchObjectChanged()
+{
+  auto* mob = qobject_cast<MatchObject*>(sender());
+
+  if (!mob)
+  {
+    Q_ASSERT(!sender());
+    mob = currentMatchObject();
+  }
+
+  if (mob != currentMatchObject())
+  {
+    return;
+  }
+
+  if (MatchObject* prev = mob->previous())
+  {
+    const auto d = mob->distanceTo(*prev);
+    m_navigation.previousMatch->setText(PREVIOUS_MATCH_LINK
+                                        + QString(" (%1s)").arg(QString::number(d / 1000.)));
+  }
+  else
+  {
+    m_navigation.previousMatch->setText(PREVIOUS_MATCH_LABEL);
+  }
+
+  if (MatchObject* next = mob->next())
+  {
+    const auto d = mob->distanceTo(*next);
+    m_navigation.nextMatch->setText(QString("(%1s) ").arg(QString::number(d / 1000.))
+                                    + NEXT_MATCH_LINK);
+  }
+  else
+  {
+    m_navigation.nextMatch->setText(NEXT_MATCH_LABEL);
+  }
+
+  m_items[0]->setSelection(mob->value().a);
+  m_items[1]->setSelection(mob->value().b);
 }
 
 QTemporaryDir& MatchEditorWidget::getTempDir()
@@ -1130,12 +1113,8 @@ QTemporaryDir& MatchEditorWidget::getTempDir()
 
 void MatchEditorWidget::refreshUi()
 {
-  const bool match_modified = m_original_match != m_edited_match;
-  m_ok_button->setText(match_modified ? "Save" : "Ok");
-  m_cancel_button->setEnabled(match_modified);
-
   m_navigation.previousMatch->setEnabled(m_editedMatchObject && m_editedMatchObject->previous());
-  m_navigation.currentMatch->setEnabled(m_editedMatchObject);
+  m_navigation.currentMatch->setEnabled(m_editedMatchObject != nullptr);
   m_navigation.nextMatch->setEnabled(m_editedMatchObject && m_editedMatchObject->next());
 }
 

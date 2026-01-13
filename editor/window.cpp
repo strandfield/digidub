@@ -1,6 +1,7 @@
 #include "window.h"
 
 #include "appsettings.h"
+#include "commands.h"
 
 #include "blackdetectthread.h"
 #include "frameextractionthread.h"
@@ -41,6 +42,7 @@
 #include <QKeyEvent>
 
 #include <QSettings>
+#include <QUndoStack>
 
 #include <QStringList>
 #include <QVariant>
@@ -71,6 +73,10 @@ MainWindow::MainWindow()
                              "Analogman Software",
                              "digidub");
 
+  m_undoStack = new QUndoStack(this);
+  m_undoStack->setActive(false);
+  connect(m_undoStack, &QUndoStack::cleanChanged, this, &MainWindow::refreshUi);
+
   if (QMenu* menu = menuBar()->addMenu("File"))
   {
     m_actions.openProject = menu->addAction("Open...",
@@ -95,6 +101,16 @@ MainWindow::MainWindow()
 
   if (QMenu* menu = menuBar()->addMenu("Edit"))
   {
+    QAction* undo = m_undoStack->createUndoAction(this);
+    undo->setShortcut(QKeySequence("Ctrl+Z"));
+    QAction* redo = m_undoStack->createRedoAction(this);
+    redo->setShortcut(QKeySequence("Ctrl+Y"));
+
+    menu->addAction(undo);
+    menu->addAction(redo);
+
+    menu->addSeparator();
+
     m_actions.deleteCurrentMatch = menu->addAction("Delete current match",
                                                    QKeySequence("Ctrl+D"),
                                                    this,
@@ -147,6 +163,11 @@ QSettings& MainWindow::settings() const
   return *m_settings;
 }
 
+QUndoStack& MainWindow::undoStack() const
+{
+  return *m_undoStack;
+}
+
 QString MainWindow::getLastOpenDir() const
 {
   return settings().value(LAST_OPEN_DIR_KEY, QString()).toString();
@@ -187,6 +208,8 @@ void MainWindow::openFile(const QString& filePath)
       return;
     }
 
+    m_undoStack->setActive();
+
     if (!m_project->videoFilePath().isEmpty())
     {
       m_primaryMedia = new MediaObject(m_project->resolvePath(m_project->videoFilePath()), this);
@@ -202,8 +225,6 @@ void MainWindow::openFile(const QString& filePath)
     {
       launchMatchEditor();
     }
-
-    setupConnectionsTo(m_project);
   }
   else
   {
@@ -285,7 +306,7 @@ void MainWindow::actSave()
   }
 
   m_project->save(savepath);
-  m_project->setModified(false);
+  m_undoStack->setClean();
 }
 
 void MainWindow::doExport()
@@ -313,7 +334,7 @@ void MainWindow::doExport()
 
     m_project->setOutputFilePath(output_path);
     m_project->convertFilePathsToRelative();
-    m_project->setModified();
+    m_undoStack->resetClean();
   }
 
   QProgressDialog progress{this};
@@ -357,17 +378,12 @@ void MainWindow::deleteCurrentMatch()
   MatchObject* next = mob->next();
   const int64_t dnext = next ? mob->distanceTo(*next) : std::numeric_limits<int64_t>::max();
 
-  m_project->removeMatch(mob);
-  mob->deleteLater();
-
   if (prev || next)
   {
     m_matchEditorWidget->setCurrentMatchObject(dprev < dnext ? prev : next);
   }
 
-  m_project->setModified(true);
-
-  refreshUi();
+  m_undoStack->push(new RemoveMatch(*mob, *m_project));
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -376,29 +392,10 @@ void MainWindow::closeEvent(QCloseEvent* event)
   QMainWindow::closeEvent(event);
 }
 
-void MainWindow::onMatchEditingFinished(bool accepted)
-{
-  qDebug() << __FUNCSIG__ << "accepted=" << accepted;
-
-  if (accepted)
-  {
-    const VideoMatch match = m_matchEditorWidget->editedMatch();
-    auto* mobj = m_matchEditorWidget->currentMatchObject();
-    qDebug() << mobj;
-    if (mobj && mobj->value() != match)
-    {
-      mobj->setValue(match);
-      m_project->setModified();
-    }
-  }
-
-  m_matchEditorWidget->reset();
-}
-
 void MainWindow::refreshUi()
 {
   m_actions.openProject->setEnabled(!m_project);
-  m_actions.saveProject->setEnabled(m_project && m_project->modified());
+  m_actions.saveProject->setEnabled(m_project && !m_undoStack->isClean());
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);
   m_actions.toggleMatchListWindow->setEnabled(m_project);
   m_actions.toggleMatchListWindow->setChecked(m_matchListWindow && m_matchListWindow->isVisible());
@@ -413,7 +410,7 @@ void MainWindow::updateWindowTitle()
   if (m_project)
   {
     QString title = m_project->projectTitle();
-    if (m_project->modified())
+    if (!m_undoStack->isClean())
     {
       title += "*";
     }
@@ -449,22 +446,11 @@ void MainWindow::launchMatchEditor()
   sw->addWidget(m_matchEditorWidget);
   sw->setCurrentIndex(sw->count() - 1);
 
-  connect(m_matchEditorWidget,
-          &MatchEditorWidget::editionFinished,
-          this,
-          &MainWindow::onMatchEditingFinished);
-
-  m_project->sortMatches();
   if (!m_project->matches().empty())
   {
     m_matchEditorWidget->setCurrentMatchObject(m_project->matches().front());
     refreshUi();
   }
-}
-
-void MainWindow::setupConnectionsTo(DubbingProject* project)
-{
-  connect(project, &DubbingProject::modifiedChanged, this, &MainWindow::refreshUi);
 }
 
 void MainWindow::updateLastSaveDir(const QString& filePath)
@@ -479,8 +465,7 @@ void MainWindow::findMatchAfter(MatchObject& matchObject)
 {
   MatchObject* next_match = nullptr;
   {
-    std::vector<MatchObject*> matches = m_project->matches();
-    ::sort(matches);
+    const std::vector<MatchObject*>& matches = m_project->matches();
 
     auto it = std::find(matches.begin(), matches.end(), &matchObject);
     Q_ASSERT(it != matches.end());
@@ -512,8 +497,7 @@ void MainWindow::findMatchBefore(MatchObject& matchObject)
 {
   MatchObject* prev_match = nullptr;
   {
-    std::vector<MatchObject*> matches = m_project->matches();
-    ::sort(matches);
+    const std::vector<MatchObject*>& matches = m_project->matches();
 
     auto it = std::find(matches.begin(), matches.end(), &matchObject);
     Q_ASSERT(it != matches.end());
@@ -631,16 +615,14 @@ void MainWindow::findMatch(const TimeSegment& withinSegment, const TimeSegment& 
   }
 
   MatchObject* obj = m_project->createMatch(match);
-  m_project->addMatch(obj);
-  m_project->setModified();
+  m_undoStack->push(new AddMatch(*obj, *m_project));
 
   m_matchEditorWidget->setCurrentMatchObject(obj);
 }
 
 void MainWindow::insertMatchAt(int64_t pos)
 {
-  std::vector<MatchObject*> allmatches = m_project->matches();
-  ::sort(allmatches);
+  const std::vector<MatchObject*>& allmatches = m_project->matches();
 
   auto it = std::upper_bound(allmatches.begin(),
                              allmatches.end(),
