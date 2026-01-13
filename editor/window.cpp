@@ -637,6 +637,36 @@ void MainWindow::findMatch(const TimeSegment& withinSegment, const TimeSegment& 
   m_matchEditorWidget->setCurrentMatchObject(obj);
 }
 
+void MainWindow::insertMatchAt(int64_t pos)
+{
+  std::vector<MatchObject*> allmatches = m_project->matches();
+  ::sort(allmatches);
+
+  auto it = std::upper_bound(allmatches.begin(),
+                             allmatches.end(),
+                             pos,
+                             [](int64_t v, MatchObject* e) { return v < e->value().a.start(); });
+
+  if (it != allmatches.begin())
+  {
+    MatchObject* m = *std::prev(it);
+    if (pos <= m->value().a.end())
+    {
+      QMessageBox::information(this, "Error", "Frame is already part of a match.");
+      return;
+    }
+  }
+
+  if (it != allmatches.end())
+  {
+    findMatchBefore(**it);
+  }
+  else
+  {
+    findMatchAfter(**std::prev(it));
+  }
+}
+
 void MainWindow::debugProc()
 {
   openFile("C:\\work\\digidub\\ignore\\ds1e03.txt");

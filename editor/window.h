@@ -44,6 +44,7 @@ public:
   void findMatchAfter(MatchObject& matchObject);
   void findMatchBefore(MatchObject& matchObject);
   void findMatch(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
+  void insertMatchAt(int64_t pos);
 
 public Q_SLOTS:
   void setThumbnailSize(int s);

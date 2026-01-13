@@ -33,6 +33,7 @@
 
 #include <QApplication>
 #include <QDesktopServices>
+#include <QTimer>
 #include <QUrl>
 
 #include <QDebug>
@@ -444,6 +445,18 @@ public:
     }
   }
 
+  void addFindMatchAction()
+  {
+    auto* find_match = new QAction("Find match", this);
+    find_match->setShortcut(QKeySequence("Ctrl+I"));
+    find_match->setShortcutContext(Qt::WidgetShortcut);
+    connect(find_match,
+            &QAction::triggered,
+            this,
+            &VideoFramesView::findMatchContainingCurrentFrame);
+    addAction(find_match);
+  }
+
   VideoPlayerWidget& videoPlayer() const { return m_player; }
 
   // be careful when accessing the model from outside not to modify
@@ -557,6 +570,26 @@ protected Q_SLOTS:
     model()->setMatchEnd(i);
 
     Q_EMIT matchRangeEdited();
+  }
+
+  void findMatchContainingCurrentFrame()
+  {
+    const int i = currentIndex().row();
+
+    if (i == -1)
+    {
+      return;
+    }
+
+    const MediaObject& media = *m_player.media();
+    const VideoFrameInfo& frame = media.framesInfo()->frames.at(i);
+    int64_t pos = media.convertPtsToPosition(frame.pts);
+    auto* w = qobject_cast<MainWindow*>(window());
+
+    if (w)
+    {
+      QTimer::singleShot(1, [w, pos]() { w->insertMatchAt(pos); });
+    }
   }
 
   void onThumbnailSizeChanged(const QVariant& value)
@@ -775,24 +808,13 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
                              0,
                              0,
                              Qt::AlignLeft);
-        sublayout->addWidget(m_navigation.insertMatchBefore =
-                                 new QLabel("<a href=\"action:insertBefore\">Insert match</a>",
-                                            this),
+        sublayout->addWidget(m_navigation.currentMatch = new QLabel(PREVIEW_LINK, this),
                              0,
                              1,
                              Qt::AlignCenter);
-        sublayout->addWidget(m_navigation.currentMatch = new QLabel(PREVIEW_LINK, this),
-                             0,
-                             2,
-                             Qt::AlignCenter);
-        sublayout->addWidget(m_navigation.insertMatchAfter =
-                                 new QLabel("<a href=\"action:insertAfter\">Insert match</a>", this),
-                             0,
-                             3,
-                             Qt::AlignCenter);
         sublayout->addWidget(m_navigation.nextMatch = new QLabel(NEXT_MATCH_LABEL, this),
                              0,
-                             4,
+                             2,
                              Qt::AlignRight);
 
         layout->addLayout(sublayout);
@@ -801,6 +823,8 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
       if (auto* sublayout = new QHBoxLayout)
       {
         sublayout->addWidget(m_items[0] = new MatchEditorItemWidget(*m_leftPlayer));
+        m_items[0]->framesView->addFindMatchAction();
+
         sublayout->addWidget(m_items[1] = new MatchEditorItemWidget(*m_rightPlayer));
 
         layout->addLayout(sublayout);
@@ -824,9 +848,7 @@ MatchEditorWidget::MatchEditorWidget(DubbingProject& project,
 
     const std::vector<QLabel*> labels{m_navigation.previousMatch,
                                       m_navigation.currentMatch,
-                                      m_navigation.nextMatch,
-                                      m_navigation.insertMatchBefore,
-                                      m_navigation.insertMatchAfter};
+                                      m_navigation.nextMatch};
 
     for (QLabel* label : labels)
     {
@@ -875,13 +897,10 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
         const auto d = mob->distanceTo(*prev);
         m_navigation.previousMatch->setText(PREVIOUS_MATCH_LINK
                                             + QString(" (%1s)").arg(QString::number(d / 1000.)));
-
-        m_navigation.insertMatchBefore->setEnabled(d > 2000);
       }
       else
       {
         m_navigation.previousMatch->setText(PREVIOUS_MATCH_LABEL);
-        m_navigation.insertMatchBefore->setEnabled(mob->value().a.start() > 2000);
       }
 
       if (MatchObject* next = mob->next())
@@ -889,13 +908,10 @@ void MatchEditorWidget::setCurrentMatchObject(MatchObject* mob)
         const auto d = mob->distanceTo(*next);
         m_navigation.nextMatch->setText(QString("(%1s) ").arg(QString::number(d / 1000.))
                                         + NEXT_MATCH_LINK);
-
-        m_navigation.insertMatchAfter->setEnabled(d > 2000);
       }
       else
       {
         m_navigation.nextMatch->setText(NEXT_MATCH_LABEL);
-        m_navigation.insertMatchAfter->setEnabled(m_video1.duration() - mob->value().a.end() > 2000);
       }
 
       m_buttonsContainer->setEnabled(true);
@@ -1087,22 +1103,6 @@ void MatchEditorWidget::onLinkActivated(const QString& link)
     if (m_editedMatchObject)
     {
       setCurrentMatchObject(m_editedMatchObject->previous());
-    }
-  }
-  else if (link == "action:insertBefore")
-  {
-    assert(m_editedMatchObject);
-    if (m_editedMatchObject)
-    {
-      qobject_cast<MainWindow*>(window())->findMatchBefore(*m_editedMatchObject);
-    }
-  }
-  else if (link == "action:insertAfter")
-  {
-    assert(m_editedMatchObject);
-    if (m_editedMatchObject)
-    {
-      qobject_cast<MainWindow*>(window())->findMatchAfter(*m_editedMatchObject);
     }
   }
   else
