@@ -155,7 +155,8 @@ MainWindow::MainWindow()
 
 MainWindow::~MainWindow()
 {
-
+  disconnect(m_undoStack, nullptr, this, nullptr);
+  m_undoStack->clear();
 }
 
 QSettings& MainWindow::settings() const
