@@ -516,29 +516,11 @@ void MainWindow::updateLastSaveDir(const QString& filePath)
 
 void MainWindow::findMatchAfter(MatchObject& matchObject)
 {
-  MatchObject* next_match = nullptr;
-  {
-    const std::vector<MatchObject*>& matches = m_project->matches();
-
-    auto it = std::find(matches.begin(), matches.end(), &matchObject);
-    Q_ASSERT(it != matches.end());
-    it = std::next(it);
-    if (it != matches.end())
-    {
-      next_match = *it;
-    }
-  }
+  MatchObject* next_match = matchObject.next();
 
   const int64_t start = matchObject.value().a.end();
-  int64_t end = 0;
-  if (next_match)
-  {
-    end = next_match->value().a.start();
-  }
-  else
-  {
-    end = m_primaryMedia->duration() * 1000;
-  }
+  const int64_t end = next_match ? next_match->value().a.start()
+                                 : int64_t(m_primaryMedia->duration() * 1000);
 
   const auto srcsegment = TimeSegment(start, end);
   findMatch(srcsegment,
@@ -548,25 +530,9 @@ void MainWindow::findMatchAfter(MatchObject& matchObject)
 
 void MainWindow::findMatchBefore(MatchObject& matchObject)
 {
-  MatchObject* prev_match = nullptr;
-  {
-    const std::vector<MatchObject*>& matches = m_project->matches();
-
-    auto it = std::find(matches.begin(), matches.end(), &matchObject);
-    Q_ASSERT(it != matches.end());
-    if (it != matches.begin())
-    {
-      prev_match = *std::prev(it);
-    }
-  }
-
+  MatchObject* prev_match = matchObject.previous();
   const int64_t end = matchObject.value().a.start();
-
-  int64_t start = 0;
-  if (prev_match)
-  {
-    start = prev_match->value().a.end();
-  }
+  const int64_t start = prev_match ? prev_match->value().a.end() : 0;
 
   const auto srcsegment = TimeSegment(start, end);
   findMatch(srcsegment,
