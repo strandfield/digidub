@@ -388,6 +388,21 @@ void MainWindow::deleteCurrentMatch()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+  if (m_undoStack->isActive() && !m_undoStack->isClean())
+  {
+    int btn = QMessageBox::question(this,
+                                    "Exit",
+                                    "Unsaved changes will be lost. Continue ?",
+                                    QMessageBox::Ok | QMessageBox::Cancel,
+                                    QMessageBox::Cancel);
+
+    if (btn != QMessageBox::Ok)
+    {
+      event->setAccepted(false);
+      return;
+    }
+  }
+
   settings().setValue(WINDOW_GEOM_KEY, saveGeometry());
   QMainWindow::closeEvent(event);
 }
