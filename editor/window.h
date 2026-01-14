@@ -49,6 +49,7 @@ public:
   void insertMatchAt(int64_t pos);
 
 public Q_SLOTS:
+  void about();
   void setThumbnailSize(int s);
 
 protected Q_SLOTS:
@@ -88,6 +89,7 @@ private:
   } m_actions;
   MatchEditorWidget* m_matchEditorWidget = nullptr;
   MatchListWindow* m_matchListWindow = nullptr;
+  QDialog* m_aboutDialog = nullptr;
 };
 
 inline MatchEditorWidget* MainWindow::currentMatchEditorWidget() const

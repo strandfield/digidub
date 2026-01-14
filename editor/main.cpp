@@ -6,6 +6,7 @@
 #include "window.h"
 
 #include <QApplication>
+#include <QVersionNumber>
 
 #include <QFileInfo>
 
@@ -14,6 +15,8 @@ int main(int argc, char *argv[])
   QApplication::setOrganizationName("Analogman Software");
   //QApplication::setOrganizationDomain("mysoft.com");
   QApplication::setApplicationName("DigiDub");
+  QCoreApplication::setApplicationVersion(
+      QVersionNumber(DIGIDUB_VERSION_MAJOR, DIGIDUB_VERSION_MINOR).toString());
 
   QApplication::setStyle("fusion");
 

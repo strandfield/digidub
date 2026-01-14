@@ -71,7 +71,8 @@ MainWindow::MainWindow()
   m_settings = new QSettings(QSettings::IniFormat,
                              QSettings::UserScope,
                              "Analogman Software",
-                             "digidub");
+                             "digidub",
+                             this);
 
   m_undoStack = new QUndoStack(this);
   m_undoStack->setActive(false);
@@ -133,11 +134,16 @@ MainWindow::MainWindow()
     }
   }
 
-  menuBar()->addAction("About Qt", qApp, &QApplication::aboutQt);
+  if (QMenu* menu = menuBar()->addMenu("Help"))
+  {
+    menu->addAction("About", this, &MainWindow::about);
+    menu->addAction("About Qt", qApp, &QApplication::aboutQt);
+  }
 
 #ifndef NDEBUG
+  if (QMenu* menu = menuBar()->addMenu("Debug"))
   {
-    menuBar()->addAction("Run debug proc", this, &MainWindow::debugProc);
+    menu->addAction("Run debug proc", this, &MainWindow::debugProc);
   }
 #endif
 
@@ -250,6 +256,37 @@ void MainWindow::openFile(const QString& filePath)
   });
 
   refreshUi();
+}
+
+void MainWindow::about()
+{
+  if (!m_aboutDialog)
+  {
+    m_aboutDialog = new QDialog(this);
+    m_aboutDialog->setWindowTitle("About | Digidub");
+
+    auto* layout = new QVBoxLayout(m_aboutDialog);
+
+    if (auto* row = new QHBoxLayout)
+    {
+      row->setSpacing(8);
+      auto* pic = new QLabel(this);
+      pic->setPixmap(QPixmap(":/images/ShogunGekomon.png"));
+      row->addWidget(pic);
+
+      row->addWidget(new QLabel(QString("This is Digidub v%1.").arg(qApp->applicationVersion())),
+                     1,
+                     Qt::AlignVCenter);
+
+      layout->addLayout(row);
+    }
+
+    auto* btn = new QPushButton("Ok");
+    connect(btn, &QPushButton::clicked, m_aboutDialog, &QDialog::close);
+    layout->addWidget(btn, 0, Qt::AlignHCenter);
+  }
+
+  m_aboutDialog->show();
 }
 
 void MainWindow::setThumbnailSize(int n)

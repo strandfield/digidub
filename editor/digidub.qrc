@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/images">
         <file>missing.svg</file>
+        <file>ShogunGekomon.png</file>
     </qresource>
     <qresource prefix="/">
         <file>images/forward-default.png</file>
