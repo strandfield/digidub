@@ -51,7 +51,7 @@ public:
   void findMatchBeforeCurrentMatch();
   void findMatch(const TimeSegment& withinSegment,
                  std::optional<int64_t> requiredTimestamp = std::nullopt);
-  void insertMatchAt(int64_t pos);
+  void findMatchContaining(int64_t pos);
 
 public Q_SLOTS:
   void about();

@@ -574,7 +574,7 @@ protected Q_SLOTS:
 
     if (w)
     {
-      QTimer::singleShot(1, [w, pos]() { w->insertMatchAt(pos); });
+      QTimer::singleShot(1, [w, pos]() { w->findMatchContaining(pos); });
     }
   }
 

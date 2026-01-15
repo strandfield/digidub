@@ -722,7 +722,7 @@ void MainWindow::findMatch(const TimeSegment& withinSegment,
   m_matchEditorWidget->setCurrentMatchObject(obj);
 }
 
-void MainWindow::insertMatchAt(int64_t pos)
+void MainWindow::findMatchContaining(int64_t pos)
 {
   const std::vector<MatchObject*>& allmatches = m_project->matches();
 
