@@ -45,6 +45,12 @@ MatchListWindow::MatchListWindow(DubbingProject& project, MainWindow& window, QW
       act->setShortcut(QKeySequence("Ctrl+Alt+Down"));
       act->setShortcutContext(Qt::WidgetShortcut);
       m_matchListWidget->addAction(act);
+
+      act = new QAction("Delete");
+      connect(act, &QAction::triggered, this, &MatchListWindow::removeSelectedMatch);
+      act->setShortcut(QKeySequence("Delete"));
+      act->setShortcutContext(Qt::WidgetShortcut);
+      m_matchListWidget->addAction(act);
     }
 
     m_matchListWidget->setColumnCount(4);
@@ -53,8 +59,6 @@ MatchListWindow::MatchListWindow(DubbingProject& project, MainWindow& window, QW
                                                      << "1@Start"
                                                      << "1@End");
     m_matchListWidget->setIndentation(0);
-
-    m_matchListWidget->installEventFilter(this);
   }
 
   connect(m_matchListWidget,
@@ -136,29 +140,13 @@ void MatchListWindow::findMatchAfterSelected()
   m_window.findMatchAfter(*mob);
 }
 
-bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
+void MatchListWindow::removeSelectedMatch()
 {
-  if (watched != m_matchListWidget)
+  MatchObject* mob = getSelectedMatchObject();
+  if (mob)
   {
-    return false;
+    m_window.undoStack().push(new RemoveMatch(*mob, m_project));
   }
-
-  if (event->type() == QEvent::KeyPress)
-  {
-    // TODO: can we make this a shortcut instead ?
-    auto* kev = static_cast<QKeyEvent*>(event);
-    if (kev->key() == Qt::Key_Delete)
-    {
-      MatchObject* mob = getSelectedMatchObject();
-      if (mob)
-      {
-        m_window.undoStack().push(new RemoveMatch(*mob, m_project));
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
 
 void MatchListWindow::closeEvent(QCloseEvent* ev)

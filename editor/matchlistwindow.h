@@ -40,10 +40,9 @@ protected Q_SLOTS:
   void onMatchChanged(MatchObject* mob);
   void findMatchBeforeSelected();
   void findMatchAfterSelected();
+  void removeSelectedMatch();
 
 protected:
-  bool eventFilter(QObject* watched, QEvent* event) override;
-
   void closeEvent(QCloseEvent* ev) override;
 
 private:
