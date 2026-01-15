@@ -112,6 +112,12 @@ MainWindow::MainWindow()
 
     menu->addSeparator();
 
+    // TODO: disable the action when triggering the action makes no sense
+    m_actions.insertMatch = menu->addAction("Insert match from selection",
+                                            QKeySequence("Ctrl+Shift+I"),
+                                            this,
+                                            &MainWindow::insertMatchFromSelection);
+
     m_actions.deleteCurrentMatch = menu->addAction("Delete current match",
                                                    QKeySequence("Ctrl+D"),
                                                    this,
@@ -405,6 +411,33 @@ void MainWindow::toggleMatchListPopup()
   {
     m_matchListWindow->setVisible(!m_matchListWindow->isVisible());
   }
+}
+
+void MainWindow::insertMatchFromSelection()
+{
+  if (!m_matchEditorWidget)
+  {
+    return;
+  }
+
+  auto [r1, r2] = m_matchEditorWidget->selectedRanges();
+
+  if (!r1 || !r2)
+  {
+    QMessageBox::information(this, "Bad", "Bad selection.\nCannot create match from this.");
+    return;
+  }
+
+  VideoMatch match;
+  match.a = m_primaryMedia->convertFrameRangeToTimeSegment(r1.first, r1.last);
+  match.b = m_secondaryMedia->convertFrameRangeToTimeSegment(r2.first, r2.last);
+
+  // TODO: crop match if it overlaps with another one
+
+  MatchObject* obj = m_project->createMatch(match);
+  m_undoStack->push(new AddMatch(*obj, *m_project));
+
+  m_matchEditorWidget->setCurrentMatchObject(obj);
 }
 
 void MainWindow::deleteCurrentMatch()

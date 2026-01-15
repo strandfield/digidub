@@ -57,6 +57,7 @@ protected Q_SLOTS:
   void actSave();
   void doExport();
   void toggleMatchListPopup();
+  void insertMatchFromSelection();
   void deleteCurrentMatch();
 
 protected:
@@ -85,6 +86,7 @@ private:
     QAction* saveProject = nullptr;
     QAction* exportProject = nullptr;
     QAction* toggleMatchListWindow = nullptr;
+    QAction* insertMatch = nullptr;
     QAction* deleteCurrentMatch = nullptr;
   } m_actions;
   MatchEditorWidget* m_matchEditorWidget = nullptr;

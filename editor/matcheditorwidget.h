@@ -44,6 +44,16 @@ public:
 
   void clearCache();
 
+  struct SelectionRange
+  {
+    int first = 0;
+    int last = -1;
+
+    operator bool() const { return last >= first; }
+  };
+
+  std::pair<SelectionRange, SelectionRange> selectedRanges() const;
+
 public Q_SLOTS:
   void launchPreview();
 
@@ -55,6 +65,7 @@ protected Q_SLOTS:
 private:
   QTemporaryDir& getTempDir();
   void refreshUi();
+  SelectionRange getSelectionRange(const MatchEditorItemWidget& item) const;
 
 private:
   DubbingProject& m_project;

@@ -911,6 +911,41 @@ void MatchEditorWidget::clearCache()
   }
 }
 
+std::pair<MatchEditorWidget::SelectionRange, MatchEditorWidget::SelectionRange>
+MatchEditorWidget::selectedRanges() const
+{
+  return std::pair(getSelectionRange(*m_items[0]), getSelectionRange(*m_items[1]));
+}
+
+MatchEditorWidget::SelectionRange MatchEditorWidget::getSelectionRange(
+    const MatchEditorItemWidget& item) const
+{
+  const QItemSelection& selection = item.framesView->selectionModel()->selection();
+
+  if (selection.isEmpty())
+  {
+    return {};
+  }
+
+  SelectionRange res;
+
+  res.first = selection.at(0).topLeft().row();
+  res.last = selection.at(0).bottomRight().row();
+
+  for (int i(1); i < selection.count(); ++i)
+  {
+    if (selection.at(i).topLeft().row() != res.last + 1)
+    {
+      qDebug() << "there is a hole in the selection";
+      return {};
+    }
+
+    res.last = selection.at(i).bottomRight().row();
+  }
+
+  return res;
+}
+
 void MatchEditorWidget::launchPreview()
 {
   QProgressDialog dialog{"Preparing preview", QString(), 0, 4, this};

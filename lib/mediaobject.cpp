@@ -100,6 +100,21 @@ QString MediaObject::fileName() const
   return QFileInfo(filePath()).fileName();
 }
 
+TimeSegment MediaObject::convertFrameRangeToTimeSegment(int firstFrameIdx, int lastFrameIdx) const
+{
+  Q_ASSERT(framesInfo());
+  const std::vector<VideoFrameInfo>& fs = framesInfo()->frames;
+
+  Q_ASSERT(firstFrameIdx < lastFrameIdx);
+  Q_ASSERT(firstFrameIdx >= 0 && lastFrameIdx < fs.size());
+
+  const auto& first_frame = fs.at(firstFrameIdx);
+  const auto& last_frame = fs.at(lastFrameIdx);
+  const int64_t start = convertPtsToPosition(first_frame.pts);
+  const int64_t end = convertPtsToPosition(last_frame.pts + 1);
+  return TimeSegment::between(start, end);
+}
+
 void MediaObject::extractFrames()
 {
   if (framesInfo() || frameExtractionThread())

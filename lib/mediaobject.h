@@ -54,6 +54,7 @@ public:
   const std::pair<int, int>& frameRateAsRational() const;
 
   int64_t convertPtsToPosition(int pts) const;
+  TimeSegment convertFrameRangeToTimeSegment(int firstFrameIdx, int lastFrameIdx) const;
 
   FramesInfo* framesInfo() const;
   void extractFrames();
