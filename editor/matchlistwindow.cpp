@@ -32,7 +32,20 @@ MatchListWindow::MatchListWindow(DubbingProject& project, MainWindow& window, QW
   if (auto* layout = new QVBoxLayout(this))
   {
     layout->addWidget(m_matchListWidget = new QTreeWidget(this));
-    m_matchListWidget->setContextMenuPolicy(Qt::NoContextMenu);
+    m_matchListWidget->setContextMenuPolicy(Qt::ActionsContextMenu);
+    {
+      auto* act = new QAction("Find match before");
+      connect(act, &QAction::triggered, this, &MatchListWindow::findMatchBeforeSelected);
+      m_matchListWidget->addAction(act);
+      act->setShortcut(QKeySequence("Ctrl+Alt+Up"));
+      act->setShortcutContext(Qt::WidgetShortcut);
+
+      act = new QAction("Find match after");
+      connect(act, &QAction::triggered, this, &MatchListWindow::findMatchAfterSelected);
+      act->setShortcut(QKeySequence("Ctrl+Alt+Down"));
+      act->setShortcutContext(Qt::WidgetShortcut);
+      m_matchListWidget->addAction(act);
+    }
 
     m_matchListWidget->setColumnCount(4);
     m_matchListWidget->setHeaderLabels(QStringList() << "0@Start"
@@ -109,6 +122,20 @@ void MatchListWindow::onMatchChanged(MatchObject* mob)
   }
 }
 
+void MatchListWindow::findMatchBeforeSelected()
+{
+  MatchObject* mob = getSelectedMatchObject();
+
+  m_window.findMatchBefore(*mob);
+}
+
+void MatchListWindow::findMatchAfterSelected()
+{
+  MatchObject* mob = getSelectedMatchObject();
+
+  m_window.findMatchAfter(*mob);
+}
+
 bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
 {
   if (watched != m_matchListWidget)
@@ -118,6 +145,7 @@ bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
 
   if (event->type() == QEvent::KeyPress)
   {
+    // TODO: can we make this a shortcut instead ?
     auto* kev = static_cast<QKeyEvent*>(event);
     if (kev->key() == Qt::Key_Delete)
     {
@@ -125,25 +153,6 @@ bool MatchListWindow::eventFilter(QObject* watched, QEvent* event)
       if (mob)
       {
         m_window.undoStack().push(new RemoveMatch(*mob, m_project));
-        return true;
-      }
-    }
-
-    if ((kev->key() == Qt::Key_Up || kev->key() == Qt::Key_Down)
-        && (kev->modifiers() & (Qt::ControlModifier | Qt::AltModifier)))
-    {
-      MatchObject* mob = getSelectedMatchObject();
-      if (mob)
-      {
-        if (kev->key() == Qt::Key_Up)
-        {
-          m_window.findMatchBefore(*mob);
-        }
-        else
-        {
-          m_window.findMatchAfter(*mob);
-        }
-
         return true;
       }
     }

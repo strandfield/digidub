@@ -18,7 +18,6 @@ class MediaObject;
 
 class MainWindow;
 
-// TODO: add a right-click menu ?
 class MatchListWindow : public QWidget
 {
   Q_OBJECT
@@ -39,6 +38,8 @@ protected Q_SLOTS:
   void onMatchAdded(MatchObject* mob);
   void onMatchRemoved(MatchObject* mob);
   void onMatchChanged(MatchObject* mob);
+  void findMatchBeforeSelected();
+  void findMatchAfterSelected();
 
 protected:
   bool eventFilter(QObject* watched, QEvent* event) override;
