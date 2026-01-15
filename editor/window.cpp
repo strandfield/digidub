@@ -112,7 +112,15 @@ MainWindow::MainWindow()
 
     menu->addSeparator();
 
-    // TODO: disable the action when triggering the action makes no sense
+    // TODO: disable these actions when triggering them makes no sense
+    m_actions.findMatchBefore = menu->addAction("Find match before current match",
+                                                QKeySequence("Ctrl+Alt+Left"),
+                                                this,
+                                                &MainWindow::findMatchBeforeCurrentMatch);
+    m_actions.findMatchAfter = menu->addAction("Find match after current match",
+                                               QKeySequence("Ctrl+Alt+Right"),
+                                               this,
+                                               &MainWindow::findMatchAfterCurrentMatch);
     m_actions.insertMatch = menu->addAction("Insert match from selection",
                                             QKeySequence("Ctrl+Shift+I"),
                                             this,
@@ -567,6 +575,26 @@ void MainWindow::findMatchBefore(MatchObject& matchObject, std::optional<int64_t
 
   const auto srcsegment = TimeSegment(start, end);
   findMatch(srcsegment, requiredTimestamp);
+}
+
+void MainWindow::findMatchAfterCurrentMatch()
+{
+  if (!m_matchEditorWidget || !m_matchEditorWidget->currentMatchObject())
+  {
+    return;
+  }
+
+  findMatchAfter(*m_matchEditorWidget->currentMatchObject());
+}
+
+void MainWindow::findMatchBeforeCurrentMatch()
+{
+  if (!m_matchEditorWidget || !m_matchEditorWidget->currentMatchObject())
+  {
+    return;
+  }
+
+  findMatchBefore(*m_matchEditorWidget->currentMatchObject());
 }
 
 void MainWindow::findMatch(const TimeSegment& withinSegment,

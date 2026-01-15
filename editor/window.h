@@ -47,6 +47,8 @@ public:
                       std::optional<int64_t> requiredTimestamp = std::nullopt);
   void findMatchBefore(MatchObject& matchObject,
                        std::optional<int64_t> requiredTimestamp = std::nullopt);
+  void findMatchAfterCurrentMatch();
+  void findMatchBeforeCurrentMatch();
   void findMatch(const TimeSegment& withinSegment,
                  std::optional<int64_t> requiredTimestamp = std::nullopt);
   void insertMatchAt(int64_t pos);
@@ -89,6 +91,8 @@ private:
     QAction* saveProject = nullptr;
     QAction* exportProject = nullptr;
     QAction* toggleMatchListWindow = nullptr;
+    QAction* findMatchBefore = nullptr;
+    QAction* findMatchAfter = nullptr;
     QAction* insertMatch = nullptr;
     QAction* deleteCurrentMatch = nullptr;
   } m_actions;
