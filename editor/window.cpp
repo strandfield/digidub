@@ -547,7 +547,7 @@ void MainWindow::updateLastSaveDir(const QString& filePath)
   }
 }
 
-void MainWindow::findMatchAfter(MatchObject& matchObject)
+void MainWindow::findMatchAfter(MatchObject& matchObject, std::optional<int64_t> requiredTimestamp)
 {
   MatchObject* next_match = matchObject.next();
 
@@ -556,24 +556,21 @@ void MainWindow::findMatchAfter(MatchObject& matchObject)
                                  : int64_t(m_primaryMedia->duration() * 1000);
 
   const auto srcsegment = TimeSegment(start, end);
-  findMatch(srcsegment,
-            TimeSegment(matchObject.value().b.end(),
-                        matchObject.value().b.end() + srcsegment.duration()));
+  findMatch(srcsegment, requiredTimestamp);
 }
 
-void MainWindow::findMatchBefore(MatchObject& matchObject)
+void MainWindow::findMatchBefore(MatchObject& matchObject, std::optional<int64_t> requiredTimestamp)
 {
   MatchObject* prev_match = matchObject.previous();
   const int64_t end = matchObject.value().a.start();
   const int64_t start = prev_match ? prev_match->value().a.end() : 0;
 
   const auto srcsegment = TimeSegment(start, end);
-  findMatch(srcsegment,
-            TimeSegment(matchObject.value().b.start() - srcsegment.duration(),
-                        srcsegment.duration()));
+  findMatch(srcsegment, requiredTimestamp);
 }
 
-void MainWindow::findMatch(const TimeSegment& withinSegment, const TimeSegment& defaultResult)
+void MainWindow::findMatch(const TimeSegment& withinSegment,
+                           std::optional<int64_t> requiredTimestamp)
 {
   QProgressDialog progress{"", "Cancel", 0, 4};
   QEventLoop loop;
@@ -651,12 +648,37 @@ void MainWindow::findMatch(const TimeSegment& withinSegment, const TimeSegment& 
 
   std::vector<VideoMatch> matches = detector.run();
 
-  VideoMatch match;
-  match.a = withinSegment;
-  match.b = defaultResult;
-
-  if (!matches.empty())
+  if (matches.empty())
   {
+    QMessageBox::information(this, "Failed", "No match could be found.");
+    return;
+  }
+
+  VideoMatch match;
+
+  if (requiredTimestamp.has_value())
+  {
+    // find a match that contains the given timestamp
+    const int64_t ts = *requiredTimestamp;
+
+    auto it = std::find_if(matches.begin(), matches.end(), [ts](const VideoMatch& e) {
+      return e.a.contains(ts);
+    });
+
+    if (it == matches.end())
+    {
+      QMessageBox::information(this,
+                               "Failed",
+                               "Could not find any match containing the specified frame.");
+      return;
+    }
+
+    match = *it;
+  }
+  else
+  {
+    // find the longest match
+
     auto it = std::max_element(matches.begin(),
                                matches.end(),
                                [](const VideoMatch& a, const VideoMatch& b) {
@@ -693,11 +715,11 @@ void MainWindow::insertMatchAt(int64_t pos)
 
   if (it != allmatches.end())
   {
-    findMatchBefore(**it);
+    findMatchBefore(**it, pos);
   }
   else
   {
-    findMatchAfter(**std::prev(it));
+    findMatchAfter(**std::prev(it), pos);
   }
 }
 

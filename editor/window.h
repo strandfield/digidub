@@ -43,9 +43,12 @@ public:
 
   MatchEditorWidget* currentMatchEditorWidget() const;
 
-  void findMatchAfter(MatchObject& matchObject);
-  void findMatchBefore(MatchObject& matchObject);
-  void findMatch(const TimeSegment& withinSegment, const TimeSegment& defaultResult);
+  void findMatchAfter(MatchObject& matchObject,
+                      std::optional<int64_t> requiredTimestamp = std::nullopt);
+  void findMatchBefore(MatchObject& matchObject,
+                       std::optional<int64_t> requiredTimestamp = std::nullopt);
+  void findMatch(const TimeSegment& withinSegment,
+                 std::optional<int64_t> requiredTimestamp = std::nullopt);
   void insertMatchAt(int64_t pos);
 
 public Q_SLOTS:
