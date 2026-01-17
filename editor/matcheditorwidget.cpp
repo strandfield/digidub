@@ -948,35 +948,19 @@ MatchEditorWidget::SelectionRange MatchEditorWidget::getSelectionRange(
 
 void MatchEditorWidget::launchPreview()
 {
-  QProgressDialog dialog{"Preparing preview", QString(), 0, 4, this};
+  if (!m_items[1]->framesView->videoPlayer().media()->audioInfo())
+  {
+    return;
+  }
+
+  const QString source_audio2_path =
+      m_items[1]->framesView->videoPlayer().media()->audioInfo()->filePath;
+
+  QProgressDialog dialog{"Preparing preview", QString(), 0, 3, this};
 
   VideoMatch match;
   match.a = m_items[0]->framesView->matchRange();
   match.b = m_items[1]->framesView->matchRange();
-
-  const QString source_audio2_path =
-      GetCacheDir() + "/"
-      + QFileInfo(m_items[1]->framesView->videoPlayer().media()->filePath()).completeBaseName()
-      + ".wav";
-
-  // extract audio 2
-  if (!QFile::exists(source_audio2_path))
-  {
-    QStringList args;
-    args << "-y"
-         << "-i" << m_items[1]->framesView->videoPlayer().media()->filePath();
-    args << "-map_metadata"
-         << "-1";
-    args << "-map"
-         << "0:1";
-    args << "-ac"
-         << "1";
-    args << source_audio2_path;
-
-    looprun("ffmpeg", args);
-  }
-
-  dialog.setValue(1);
 
   const QString baseaudioname = QString::number(match.b.start()) + "-"
                                 + QString::number(match.b.end());
@@ -995,7 +979,7 @@ void MatchEditorWidget::launchPreview()
     looprun("ffmpeg", args);
   }
 
-  dialog.setValue(2);
+  dialog.setValue(1);
 
   const double ratio = match.b.duration() / double(match.a.duration());
 
@@ -1018,7 +1002,7 @@ void MatchEditorWidget::launchPreview()
     looprun("ffmpeg", args);
   }
 
-  dialog.setValue(3);
+  dialog.setValue(2);
 
   const QString previewpath = getTempDir().filePath("preview.mkv");
 
@@ -1049,7 +1033,7 @@ void MatchEditorWidget::launchPreview()
     looprun("ffmpeg", args);
   }
 
-  dialog.setValue(4);
+  dialog.setValue(3);
 
   QDesktopServices::openUrl(QUrl::fromLocalFile(previewpath));
 }

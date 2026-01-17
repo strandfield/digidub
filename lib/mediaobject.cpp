@@ -5,11 +5,12 @@
 #include "scdetthread.h"
 #include "silencedetectthread.h"
 
+#include "cache.h"
 #include "exerun.h"
 
-#include <QTimer>
-
 #include <QFileInfo>
+#include <QTimer>
+#include <QUuid>
 
 class FFprobeOutputExtractor
 {
@@ -88,6 +89,17 @@ MediaObject::MediaObject(const QString& filePath, QObject* parent)
   }
 
   m_title = extractor.tryExtract("TAG:title");
+
+  launchAudioExtraction();
+}
+
+MediaObject::~MediaObject()
+{
+  if (audioInfo())
+  {
+    qDebug() << "removing" << audioInfo()->filePath;
+    QFile::remove(audioInfo()->filePath);
+  }
 }
 
 const QString& MediaObject::filePath() const
@@ -233,4 +245,43 @@ void MediaObject::onScdetFinished()
   m_scenes = std::make_unique<ScenesInfo>();
   m_scenes->scenechanges = std::move(m_scdetThread->scenechanges());
   QTimer::singleShot(10, [this]() { m_scdetThread.reset(); });
+}
+
+AudioWaveformInfo* MediaObject::audioInfo() const
+{
+  return m_audioInfo.get();
+}
+
+void MediaObject::onAudioExtractionFinished()
+{
+  if (auto* process = qobject_cast<QProcess*>(sender()))
+  {
+    const QString filepath = process->arguments().back();
+    AudioWaveformInfo info;
+    info.filePath = filepath;
+    m_audioInfo = std::make_unique<AudioWaveformInfo>(info);
+    Q_EMIT audioAvailable();
+    process->deleteLater();
+  }
+}
+
+void MediaObject::launchAudioExtraction()
+{
+  const auto basename = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+
+  const QString filepath = GetCacheDir() + "/" + basename + ".wav";
+
+  QStringList args;
+  args << "-y"
+       << "-i" << filePath();
+  args << "-map_metadata"
+       << "-1";
+  args << "-map"
+       << "0:1";
+  args << "-ac"
+       << "1";
+  args << filepath;
+
+  QProcess* process = ::run("ffmpeg", args);
+  connect(process, &QProcess::finished, this, &MediaObject::onAudioExtractionFinished);
 }

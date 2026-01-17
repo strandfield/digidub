@@ -31,6 +31,11 @@ struct ScenesInfo
   std::vector<SceneChange> scenechanges;
 };
 
+struct AudioWaveformInfo
+{
+  QString filePath;
+};
+
 class BlackdetectThread;
 class FrameExtractionThread;
 class ScdetThread;
@@ -41,6 +46,7 @@ class MediaObject : public QObject
   Q_OBJECT
 public:
   explicit MediaObject(const QString& filePath, QObject* parent = nullptr);
+  ~MediaObject();
 
   const QString& filePath() const;
   QString fileName() const;
@@ -72,14 +78,21 @@ public:
   void scdet();
   ScdetThread* scdetThread() const;
 
+  AudioWaveformInfo* audioInfo() const;
+
 Q_SIGNALS:
   void framesAvailable();
+  void audioAvailable();
 
 protected Q_SLOTS:
   void onFrameExtractionFinished();
   void onSilencedetectFinished();
   void onBlackdetectFinished();
   void onScdetFinished();
+  void onAudioExtractionFinished();
+
+private:
+  void launchAudioExtraction();
 
 private:
   QString m_filePath;
@@ -95,6 +108,7 @@ private:
   std::unique_ptr<BlackdetectThread> m_blackdetectThread;
   std::unique_ptr<ScenesInfo> m_scenes;
   std::unique_ptr<ScdetThread> m_scdetThread;
+  std::unique_ptr<AudioWaveformInfo> m_audioInfo;
 };
 
 inline const QString& MediaObject::title() const
