@@ -672,7 +672,9 @@ void MainWindow::findMatch(const TimeSegment& withinSegment,
 
   MatchDetector detector{*m_primaryMedia, *m_secondaryMedia};
 
-  detector.segmentA() = withinSegment;
+  detector.segmentA = withinSegment;
+  // Note: on pourrait essayer de restreindre la plage de recherche dans la
+  // deuxième vidéo, mais jusqu'à présent il n'y a jamais vraiment eu besoin.
 
   std::vector<VideoMatch> matches = detector.run();
 

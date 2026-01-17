@@ -1260,51 +1260,40 @@ Video::Video(const MediaObject& media)
 namespace {} // namespace
 
 MatchDetector::MatchDetector(const MediaObject& a, const MediaObject& b)
-    : m_a(a)
-    , m_b(b)
-    , m_segmentA(0, a.duration() * 1000)
-    , m_segmentB(0, b.duration() * 1000)
+    : m_a(&a)
+    , m_b(&b)
+    , segmentA(0, a.duration() * 1000)
+    , segmentB(0, b.duration() * 1000)
 {
   static_assert(std::is_same_v<decltype(a.duration()), double>,
                 "duration is currently expected to be a double");
 
-  // TODO: vérifier qu'on a bien toutes les infos
-}
+  assert(a.silenceInfo() && "silence info is missing");
+  assert(a.blackFramesInfo() && "black frame info is missing");
+  assert(a.scenesInfo() && "scenes info is missing");
+  assert(a.framesInfo() && b.framesInfo() && "frame info is missing");
 
-MatchAlgo::Parameters& MatchDetector::parameters()
-{
-  return m_parameters;
-}
-
-TimeSegment& MatchDetector::segmentA()
-{
-  return m_segmentA;
-}
-
-TimeSegment& MatchDetector::segmentB()
-{
-  return m_segmentB;
+  if (!(a.silenceInfo() && a.blackFramesInfo() && a.scenesInfo() && a.framesInfo()
+        && b.framesInfo()))
+  {
+    throw std::runtime_error("missing some data from MatchDetector inputs");
+  }
 }
 
 std::vector<VideoMatch> MatchDetector::run()
 {
-  if (!m_ready)
-  {
-    assert(false);
-    return {};
-  }
+  MatchAlgo::Video a{*m_a};
+  MatchAlgo::Video b{*m_b};
 
-  m_ready = false;
+  MatchAlgo::mark_silence_frames(a);
 
-  MatchAlgo::mark_silence_frames(m_a);
+  MatchAlgo::silenceborders(a.frames);
 
-  MatchAlgo::silenceborders(m_a.frames);
+  MatchAlgo::mark_black_frames(a);
 
-  MatchAlgo::mark_black_frames(m_a);
+  MatchAlgo::mark_sc_frames(a, this->parameters.scdetThreshold);
 
-  MatchAlgo::mark_sc_frames(m_a, parameters().scdetThreshold);
+  MatchAlgo::merge_small_scenes(a, 7);
 
-  MatchAlgo::merge_small_scenes(m_a, 7);
-
-  return MatchAlgo::find_matches(m_a, m_segmentA, m_b, m_segmentB, m_parameters);
+  return MatchAlgo::find_matches(a, this->segmentA, b, this->segmentB, this->parameters);
 }

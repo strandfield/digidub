@@ -178,24 +178,18 @@ inline bool operator!=(const FrameSpan& lhs, const FrameSpan& rhs)
 class MatchDetector
 {
 public:
+  MatchAlgo::Parameters parameters;
+  TimeSegment segmentA;
+  TimeSegment segmentB;
+
+public:
   MatchDetector(const MediaObject& a, const MediaObject& b);
-
-  MatchAlgo::Parameters& parameters();
-
-  TimeSegment& segmentA();
-  TimeSegment& segmentB();
-
-  void reset();
 
   std::vector<VideoMatch> run();
 
 private:
-  MatchAlgo::Video m_a;
-  MatchAlgo::Video m_b;
-  MatchAlgo::Parameters m_parameters;
-  TimeSegment m_segmentA;
-  TimeSegment m_segmentB;
-  bool m_ready = true;
+  const MediaObject* m_a;
+  const MediaObject* m_b;
   // TODO: ajouter un système de log
 };
 
