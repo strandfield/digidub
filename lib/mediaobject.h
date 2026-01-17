@@ -6,6 +6,7 @@
 #define MEDIAOBJECT_H
 
 #include "mediainfo.h"
+#include "wav.h"
 
 #include <QObject>
 
@@ -31,9 +32,15 @@ struct ScenesInfo
   std::vector<SceneChange> scenechanges;
 };
 
-struct AudioWaveformInfo
+class AudioWaveformInfo
 {
+public:
   QString filePath;
+
+  int64_t period = 10;
+  std::vector<WavSample> samples;
+
+  WavSample getSampleForTime(int64_t pos) const;
 };
 
 class BlackdetectThread;

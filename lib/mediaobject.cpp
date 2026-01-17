@@ -7,6 +7,7 @@
 
 #include "cache.h"
 #include "exerun.h"
+#include "wav.h"
 
 #include <QFileInfo>
 #include <QTimer>
@@ -54,6 +55,22 @@ public:
     return val;
   }
 };
+
+WavSample AudioWaveformInfo::getSampleForTime(int64_t pos) const
+{
+  if (pos < 0)
+  {
+    return {};
+  }
+
+  const size_t index = pos / this->period;
+  if (index >= this->samples.size())
+  {
+    return {};
+  }
+
+  return this->samples[index];
+}
 
 MediaObject::MediaObject(const QString& filePath, QObject* parent)
     : QObject(parent)
@@ -258,8 +275,18 @@ void MediaObject::onAudioExtractionFinished()
     AudioWaveformInfo info;
     info.filePath = filepath;
     m_audioInfo = std::make_unique<AudioWaveformInfo>(info);
-    Q_EMIT audioAvailable();
     process->deleteLater();
+
+    // TODO: à faire dans un thread secondaire
+    m_audioInfo->samples = readWav(filepath);
+
+    // for (size_t i(1000); i < std::min(size_t(1100), m_audioInfo->samples.size()); ++i)
+    // {
+    //   WavSample s = m_audioInfo->samples[i];
+    //   qDebug() << getWavSampleHigh(s) << getWavSampleLow(s);
+    // }
+
+    Q_EMIT audioAvailable();
   }
 }
 

@@ -16,6 +16,7 @@ class PlayerBar;
 class PlayerButton;
 class PlayerPlayButton;
 class TimeDisplay;
+class WaveformViewer;
 
 class VideoPlayerWidget : public QWidget
 {
@@ -60,6 +61,7 @@ private:
   PlayerButton* m_stop_button = nullptr;
   PlayerButton* m_stepForwardButton = nullptr;
   PlayerButton* m_stepBackwardButton = nullptr;
+  WaveformViewer* m_waveformViewer = nullptr;
 };
 
 #endif // VIDEOPLAYERWIDGET_H

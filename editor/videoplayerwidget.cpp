@@ -2,6 +2,7 @@
 
 #include "widgets/playerbar.h"
 #include "widgets/playerbutton.h"
+#include "widgets/waveformviewer.h"
 
 #include "mediaobject.h"
 
@@ -67,16 +68,29 @@ VideoPlayerWidget::VideoPlayerWidget()
       l->addLayout(row);
     }
 
+    m_waveformViewer = new WaveformViewer(this);
+    l->addWidget(m_waveformViewer);
+
     l->addStretch();
   }
 
-  // connect player bar
+  // connect (actual) player
   {
     connect(m_player,
             &QMediaPlayer::positionChanged,
             this,
             &VideoPlayerWidget::onMediaPlayerPositionChanged);
+  }
+
+  // connect player bar
+  {
     connect(m_playerBar, &PlayerBar::clicked, this, &VideoPlayerWidget::seekTime);
+  }
+
+  // connect waveform viewer
+  if (m_waveformViewer)
+  {
+    connect(m_waveformViewer, &WaveformViewer::clicked, this, &VideoPlayerWidget::seek);
   }
 
   // connect buttons
@@ -122,12 +136,16 @@ void VideoPlayerWidget::setMedia(MediaObject* media)
 
     m_playerBar->setRange(0, m_media->duration());
     m_timeDisplay->setMax(m_media->duration() * 1000);
+
+    m_waveformViewer->setMedia(m_media);
   }
   else
   {
     m_playerBar->setRange(0, 1);
     m_timeDisplay->setMax(0);
     m_playerBar->setEnabled(false);
+
+    m_waveformViewer->setMedia(nullptr);
   }
 }
 
@@ -205,6 +223,7 @@ void VideoPlayerWidget::onMediaPlayerPositionChanged(qint64 pos)
 {
   m_playerBar->setValue(pos / double(1000));
   m_timeDisplay->setCurrent(pos);
+  m_waveformViewer->setPosition(pos);
 }
 
 void VideoPlayerWidget::onMediaStatusChanged()

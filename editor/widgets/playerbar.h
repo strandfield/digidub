@@ -46,6 +46,7 @@ struct Timestamp
 };
 
 Timestamp make_timestamp(qint64 msecs);
+QString to_string(const Timestamp &ts);
 
 class TimeDisplay : public QLabel
 {
