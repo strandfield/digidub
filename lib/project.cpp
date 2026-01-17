@@ -144,7 +144,6 @@ DubbingProject::DubbingProject(const QString& videoPath, const QString& audioPat
     , m_videoFilePath(videoPath)
     , m_audioSourceFilePath(audioPath)
 {
-  // TODO: lire les metadata pour en extraire le titre, e.g. "Digimon S1E04 - Biyomon Gets Firepower"
   m_projectTitle = QFileInfo(videoPath).completeBaseName();
 }
 

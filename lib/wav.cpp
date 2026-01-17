@@ -133,32 +133,32 @@ std::vector<WavSample> readWav(const QString& filePath)
       break;
     }
 
-    int highcum = 0, lowcum = 0;
-    int nhigh = 0, nlow = 0;
+    // int acchigh = 0, acclow = 0;
+    // int nhigh = 0, nlow = 0;
     int maxval = 0;
     int minval = 0;
 
     for (auto it = begin; it != end; ++it)
     {
-      int16_t sample = *it;
+      const int16_t sample = *it;
 
       maxval = std::max<int>(maxval, sample);
       minval = std::min<int>(minval, sample);
 
-      if (sample < 0)
-      {
-        lowcum += sample;
-        ++nlow;
-      }
-      else
-      {
-        highcum += sample;
-        ++nhigh;
-      }
+      // if (sample < 0)
+      // {
+      //   acclow += sample;
+      //   ++nlow;
+      // }
+      // else
+      // {
+      //   acchigh += sample;
+      //   ++nhigh;
+      // }
     }
 
-    const int highavg = nhigh ? 255 * highcum / (std::numeric_limits<int16_t>::max() * nhigh) : 0;
-    const int lowavg = nlow ? 255 * lowcum / (std::numeric_limits<int16_t>::min() * nlow) : 0;
+    // const int avghigh = nhigh ? 255 * acchigh / (std::numeric_limits<int16_t>::max() * nhigh) : 0;
+    // const int avglow = nlow ? 255 * acclow / (std::numeric_limits<int16_t>::min() * nlow) : 0;
 
     maxval = 255 * maxval / std::numeric_limits<int16_t>::max();
     minval = 255 * minval / std::numeric_limits<int16_t>::min();

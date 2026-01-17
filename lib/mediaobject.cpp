@@ -56,6 +56,31 @@ public:
   }
 };
 
+class WaveformReadingThread : public QThread
+{
+  Q_OBJECT
+public:
+  explicit WaveformReadingThread(const QString& filePath, QObject* parent = nullptr)
+      : QThread(parent)
+      , filePath(filePath)
+  {}
+
+  void run() override
+  {
+    readSamples = readWav(this->filePath);
+
+    // for (size_t i(1000); i < std::min(size_t(1100), m_audioInfo->samples.size()); ++i)
+    // {
+    //   WavSample s = m_audioInfo->samples[i];
+    //   qDebug() << getWavSampleHigh(s) << getWavSampleLow(s);
+    // }
+  }
+
+public:
+  QString filePath;
+  std::vector<WavSample> readSamples;
+};
+
 WavSample AudioWaveformInfo::getSampleForTime(int64_t pos) const
 {
   if (pos < 0)
@@ -272,21 +297,20 @@ void MediaObject::onAudioExtractionFinished()
   if (auto* process = qobject_cast<QProcess*>(sender()))
   {
     const QString filepath = process->arguments().back();
-    AudioWaveformInfo info;
-    info.filePath = filepath;
-    m_audioInfo = std::make_unique<AudioWaveformInfo>(info);
+    auto* thread = new WaveformReadingThread(filepath, this);
+    connect(thread, &QThread::finished, this, &MediaObject::onAudioExtractionFinished);
+    thread->start();
     process->deleteLater();
-
-    // TODO: à faire dans un thread secondaire
-    m_audioInfo->samples = readWav(filepath);
-
-    // for (size_t i(1000); i < std::min(size_t(1100), m_audioInfo->samples.size()); ++i)
-    // {
-    //   WavSample s = m_audioInfo->samples[i];
-    //   qDebug() << getWavSampleHigh(s) << getWavSampleLow(s);
-    // }
+  }
+  else if (auto* thread = qobject_cast<WaveformReadingThread*>(sender()))
+  {
+    m_audioInfo = std::make_unique<AudioWaveformInfo>();
+    m_audioInfo->filePath = thread->filePath;
+    m_audioInfo->samples = std::move(thread->readSamples);
 
     Q_EMIT audioAvailable();
+
+    thread->deleteLater();
   }
 }
 
@@ -310,3 +334,5 @@ void MediaObject::extractAudioInfo()
   QProcess* process = ::run("ffmpeg", args);
   connect(process, &QProcess::finished, this, &MediaObject::onAudioExtractionFinished);
 }
+
+#include "mediaobject.moc"
