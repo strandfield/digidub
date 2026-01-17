@@ -79,6 +79,7 @@ public:
   ScdetThread* scdetThread() const;
 
   AudioWaveformInfo* audioInfo() const;
+  void extractAudioInfo();
 
 Q_SIGNALS:
   void framesAvailable();
@@ -90,9 +91,6 @@ protected Q_SLOTS:
   void onBlackdetectFinished();
   void onScdetFinished();
   void onAudioExtractionFinished();
-
-private:
-  void launchAudioExtraction();
 
 private:
   QString m_filePath;

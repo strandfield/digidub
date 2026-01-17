@@ -89,8 +89,6 @@ MediaObject::MediaObject(const QString& filePath, QObject* parent)
   }
 
   m_title = extractor.tryExtract("TAG:title");
-
-  launchAudioExtraction();
 }
 
 MediaObject::~MediaObject()
@@ -265,7 +263,7 @@ void MediaObject::onAudioExtractionFinished()
   }
 }
 
-void MediaObject::launchAudioExtraction()
+void MediaObject::extractAudioInfo()
 {
   const auto basename = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 

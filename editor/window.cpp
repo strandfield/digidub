@@ -234,12 +234,14 @@ void MainWindow::openFile(const QString& filePath)
     if (!m_project->videoFilePath().isEmpty())
     {
       m_primaryMedia = new MediaObject(m_project->resolvePath(m_project->videoFilePath()), this);
+      m_primaryMedia->extractAudioInfo();
     }
 
     if (!m_project->audioSourceFilePath().isEmpty())
     {
       m_secondaryMedia = new MediaObject(m_project->resolvePath(m_project->audioSourceFilePath()),
                                          this);
+      m_secondaryMedia->extractAudioInfo();
     }
 
     if (m_primaryMedia && m_secondaryMedia)
