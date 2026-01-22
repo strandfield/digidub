@@ -112,7 +112,6 @@ MainWindow::MainWindow()
 
     menu->addSeparator();
 
-    // TODO: disable these actions when triggering them makes no sense
     m_actions.findMatchBefore = menu->addAction("Find match before current match",
                                                 QKeySequence("Ctrl+Alt+Left"),
                                                 this,
@@ -495,8 +494,16 @@ void MainWindow::refreshUi()
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);
   m_actions.toggleMatchListWindow->setEnabled(m_project);
   m_actions.toggleMatchListWindow->setChecked(m_matchListWindow && m_matchListWindow->isVisible());
-  m_actions.deleteCurrentMatch->setEnabled(m_matchEditorWidget
-                                           && m_matchEditorWidget->currentMatchObject());
+
+  const bool has_selected_match_object = m_matchEditorWidget
+                                         && m_matchEditorWidget->currentMatchObject();
+  // Note: we probably could do better for these three actions,
+  // but what we have here is better than nothing.
+  m_actions.findMatchBefore->setEnabled(has_selected_match_object);
+  m_actions.findMatchAfter->setEnabled(has_selected_match_object);
+  m_actions.insertMatch->setEnabled(m_matchEditorWidget);
+
+  m_actions.deleteCurrentMatch->setEnabled(has_selected_match_object);
 
   updateWindowTitle();
 }
