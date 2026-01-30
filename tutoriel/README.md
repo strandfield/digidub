@@ -187,26 +187,29 @@ De manière générale, le logiciel fait globalement un travail convenable ; mai
 fréquent de devoir faire quelques retouches à la main.
 
 C'est là qu'intervient `matcheditor`.
-Ce dernier permet de visualiser les correspondances trouvées par `digidub-cli`, de les modifier
+Cet outil permet de visualiser les correspondances trouvées par `digidub-cli`, de les modifier
 et d'en chercher des supplémentaires.
 
 `matcheditor` permet d'ouvrir un fichier de projet et affiche alors côte-à-côte les deux vidéos.
 
 ![Screenshot of matcheditor](screenshots/matcheditor-1.png)
 
-Après l'ouverture du projet, une petite fenêtre flottante s'affiche et liste les correspondances.
+Après l'ouverture du projet, il est possible de parcourir les correspondances en cliquant sur les 
+liens "< Prev" et "Next >" respectivement au milieu à gauche et au milieu à droite de la fenêtre.
+Alternativement, le menu "View > Match list" permet d'afficher une petite fenêtre flottante listant
+l'ensemble des correspondances.
 
-Cette fenêtre permet de supprimer la correspondance sélectionnée avec la touche Suppr.
-
-En double-cliquant sur une correspondance, on passe en mode édition.
-
-Les frames appartenant à la correspondance sont alors affichées avec un fond vert.
+Les frames appartenant à la correspondance courante sont affichées avec un fond vert dans la liste 
+des frames.
 Il est possible de d'éditer le début et la fin du match en faisant un clic droit sur une frame, 
 puis en sélectionnant "Set as match begin" ou "Set as match end" dans le menu contextuel.
 
-Les boutons sur la droite permettent de générer une preview de la correspondance et de valider
-ou annuler les modifications.
-Si des modifications sont effetuées, il faut bien penser à les sauvegarder via l'action "Save"
-du menu "File".
+Le lien "Preview", au centre de la fenêtre, permet de prévisualiser la correspondance actuellement
+sélectionnée.
+
+Le menu "Edit > Delete current match" permet de supprimer le match courant.
+Alternativement, on peut supprimer un match depuis la fenêtre des matchs avec la touche Suppr.
+
+Une fois les modifications effectuées, il faut penser à les sauvegarder via le menu "File > Save".
 
 Enfin, la vidéo peut être exportée directement depuis `matcheditor` via "File > Export". 

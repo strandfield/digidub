@@ -51,3 +51,10 @@ For compiling:
 For running the program:
 - `ffmpeg` and `mkvmerge` must be installed on your system and added to 
   your `PATH`
+
+## Changelog
+
+**v2.1:** display audio waveform + various user experience improvements (e.g., undo/redo).
+
+**v2.0:** added a graphical user interface (GUI).
+
