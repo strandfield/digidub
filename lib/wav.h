@@ -30,3 +30,4 @@ inline WavSample makeWavSample(int high, int low)
 }
 
 std::vector<WavSample> readWav(const QString& filePath);
+int readWavSampleRate(const QString& filePath);

@@ -128,6 +128,8 @@ struct DubExporter::Data
 
   int numberOfAudioTracksExtracted = 0;
 
+  int trackSampleRates[2] = {0};
+
   double audiogain = 0;
 
   std::vector<OutputSegment> osegs;
@@ -290,6 +292,7 @@ void DubExporter::step()
       d->numberOfAudioTracksExtracted += 1;
       if (d->numberOfAudioTracksExtracted == 2)
       {
+        measureTracksSampleRate();
         advanceToNextStep();
       }
       else
@@ -466,6 +469,12 @@ void DubExporter::step()
           args << "-filter:a";
           args << audiofilters.join(',');
         }
+
+        if (d->trackSampleRates[0] != d->trackSampleRates[1])
+        {
+          args << "-ar" << QString::number(d->trackSampleRates[0]);
+        }
+
         args << outputpath;
 
         QProcess* proc = run("ffmpeg", args, check_audio_postprocessing);
@@ -617,4 +626,17 @@ QProcess* DubExporter::run(const QString& program, const QStringList& args, Call
   connect(process, &QProcess::finished, this, std::forward<Callback>(onFinished));
   d->waiting = true;
   return process;
+}
+
+void DubExporter::measureTracksSampleRate()
+{
+  auto& tempDir = d->tempDir;
+  const QString source_audio1_path = tempDir.filePath("src1.wav");
+  const QString source_audio2_path = tempDir.filePath("src2.wav");
+
+  d->trackSampleRates[0] = readWavSampleRate(source_audio1_path);
+  d->trackSampleRates[1] = readWavSampleRate(source_audio2_path);
+
+  qDebug() << "Sample rate of track 1:" << d->trackSampleRates[0];
+  qDebug() << "Sample rate of track 2:" << d->trackSampleRates[1];
 }

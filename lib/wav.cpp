@@ -169,3 +169,44 @@ std::vector<WavSample> readWav(const QString& filePath)
 
   return result;
 }
+
+int readWavSampleRate(const QString& filePath)
+{
+  QFile file{filePath};
+  if (!file.open(QIODevice::ReadOnly))
+  {
+    qDebug() << "could not open" << filePath;
+    return {};
+  }
+
+  // Read the WAV header
+  WavHeader header;
+  file.read(reinterpret_cast<char*>(&header), sizeof(WavHeader));
+
+  // If the file is a valid WAV file
+  if (std::string(header.chunk_ID, 4) != "WAVE" && std::string(header.chunk_ID, 4) != "RIFF")
+  {
+    qDebug() << "Not a WAVE or RIFF!";
+    return {};
+  }
+
+  while (!file.atEnd())
+  {
+    ChunkHeader chkheader;
+    file.read(reinterpret_cast<char*>(&chkheader), sizeof(ChunkHeader));
+
+    if (std::string(chkheader.chunk_ID, 4) == "fmt ")
+    {
+      FmtChunk chunk;
+      file.read(reinterpret_cast<char*>(&chunk) + sizeof(ChunkHeader),
+                sizeof(FmtChunk) - sizeof(ChunkHeader));
+      return chunk.sample_rate;
+    }
+    else
+    {
+      file.seek(file.pos() + chkheader.chunk_size);
+    }
+  }
+
+  return 0;
+}

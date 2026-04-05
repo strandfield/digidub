@@ -66,6 +66,9 @@ private:
   QProcess* run(const QString& program, const QStringList& args, Callback&& onFinished);
 
 private:
+  void measureTracksSampleRate();
+
+private:
   const DubbingProject& m_project;
   const MediaObject& m_video;
   QString m_outputFilePath;
