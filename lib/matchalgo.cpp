@@ -1031,6 +1031,32 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
 
 using FrameSpanMatch = std::pair<FrameSpan, FrameSpan>;
 
+// helper function for find_matches_in_segment()
+static bool append_match(std::vector<FrameSpanMatch>& list, FrameSpanMatch m)
+{
+  if (list.empty())
+  {
+    list.push_back(m);
+    return true;
+  }
+
+  FrameSpanMatch& lastmatch = list.back();
+  if (lastmatch.first.endOffset() <= m.first.startOffset())
+  {
+    list.push_back(m);
+    return true;
+  }
+
+  if (lastmatch.first.count >= m.first.count)
+  {
+    return false;
+  }
+
+  lastmatch = m;
+
+  return true;
+}
+
 static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segment,
                                                            const FrameSpan& searchArea,
                                                            const Parameters& algoParams)
@@ -1040,30 +1066,20 @@ static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segm
     qDebug() << "S:" << segment << " A:" << searchArea;
   }
 
-  FrameSpanMatch result;
+  std::vector<FrameSpanMatch> result;
 
   const std::vector<FrameSpan> scenes = split_at_scframes(segment);
 
   auto it = scenes.begin();
   while (it != scenes.end())
   {
-    {
-      const size_t nb_frames_remaining = std::accumulate(it,
-                                                         scenes.end(),
-                                                         size_t(0),
-                                                         [](size_t n, const FrameSpan& e) {
-                                                           return n + e.size();
-                                                         });
-
-      if (nb_frames_remaining < result.first.size())
-      {
-        // there is no way we can do better with what remains, return now!
-        break;
-      }
-    }
-
     MatchingArea m;
 
+    // We consider the current scene, and try to find a match for it in the
+    // search area.
+    // If the current scene isn't the last, we search for a match that also
+    // include the next scene in order to reduce the probability of a false
+    // match.
     if (std::next(it) != scenes.end())
     {
       // This "extended_pattern" is a fix for episode 31.
@@ -1087,6 +1103,7 @@ static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segm
       m = find_best_matching_area_ex(*it, searchArea);
     }
 
+    // If the match isn't good enough, we go on to the next scene.
     if (m.score > algoParams.areaMatchThreshold)
     {
       if (debugmatches)
@@ -1103,6 +1120,7 @@ static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segm
       qDebug() << " >" << m.pattern << " ~ " << m.match;
     }
 
+    // We then try to extend the match to the next scenes.
     auto [end_it, last_match_from_sa] = extend_match(m,
                                                      std::next(it),
                                                      scenes.end(),
@@ -1118,6 +1136,8 @@ static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segm
       qDebug() << "  >>" << merge(*it, *std::prev(end_it)) << " ~ " << m.match;
     }
 
+    // Finally, we perform some adjustments to the match, notably to remove or add
+    // a few frames at the beginning or end of the match.
     std::tie(m.pattern, m.match) = refine_match(it, end_it, m.match, searchArea, algoParams);
 
     if (debugmatches)
@@ -1125,25 +1145,12 @@ static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segm
       qDebug() << "  >>>" << m.pattern << " ~ " << m.match;
     }
 
-    if (m.pattern.count > result.first.count)
-    {
-      // if (result.first.count > 0)
-      // {
-      //   qDebug() << "    discarding " << result.first << "~" << result.second << " in favour of "
-      //            << m.pattern << "~" << m.match;
-      // }
-
-      result = std::pair(m.pattern, m.match);
-    }
+    append_match(result, FrameSpanMatch(m.pattern, m.match));
 
     it = end_it;
   }
 
-  if (!result.first.count)
-  {
-    return {};
-  }
-  return {result};
+  return result;
 }
 
 TimeSegment to_timesegment(const FrameSpan& span)
