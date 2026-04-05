@@ -1029,29 +1029,27 @@ std::pair<FrameSpan, FrameSpan> refine_match(std::vector<FrameSpan>::const_itera
   return std::pair(refined_pattern, refined_match);
 }
 
-std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern,
-                                                        const FrameSpan& searchArea,
-                                                        const Parameters& algoParams)
+using FrameSpanMatch = std::pair<FrameSpan, FrameSpan>;
+
+static std::vector<FrameSpanMatch> find_matches_in_segment(const FrameSpan& segment,
+                                                           const FrameSpan& searchArea,
+                                                           const Parameters& algoParams)
 {
   if (debugmatches)
   {
-    qDebug() << "S:" << pattern << " A:" << searchArea;
+    qDebug() << "S:" << segment << " A:" << searchArea;
   }
 
-  std::pair<FrameSpan, FrameSpan> result;
+  FrameSpanMatch result;
 
-  const std::vector<FrameSpan> patspans = split_at_scframes(pattern);
-  // for (const FrameSpan& s : patspans)
-  // {
-  //   qDebug() << get_nth_frame_pts(*pattern.video, s.startOffset());
-  // }
+  const std::vector<FrameSpan> scenes = split_at_scframes(segment);
 
-  auto it = patspans.begin();
-  while (it != patspans.end())
+  auto it = scenes.begin();
+  while (it != scenes.end())
   {
     {
       const size_t nb_frames_remaining = std::accumulate(it,
-                                                         patspans.end(),
+                                                         scenes.end(),
                                                          size_t(0),
                                                          [](size_t n, const FrameSpan& e) {
                                                            return n + e.size();
@@ -1066,7 +1064,7 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
 
     MatchingArea m;
 
-    if (std::next(it) != patspans.end())
+    if (std::next(it) != scenes.end())
     {
       // This "extended_pattern" is a fix for episode 31.
       // The segment starting at (7:02,eng,frame#10560) and ending at (7:04,eng) gets matched
@@ -1107,7 +1105,7 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
 
     auto [end_it, last_match_from_sa] = extend_match(m,
                                                      std::next(it),
-                                                     patspans.end(),
+                                                     scenes.end(),
                                                      searchArea.endOffset(),
                                                      algoParams);
 
@@ -1141,7 +1139,11 @@ std::pair<FrameSpan, FrameSpan> find_best_subspan_match(const FrameSpan& pattern
     it = end_it;
   }
 
-  return result;
+  if (!result.first.count)
+  {
+    return {};
+  }
+  return {result};
 }
 
 TimeSegment to_timesegment(const FrameSpan& span)
@@ -1180,14 +1182,14 @@ std::vector<VideoMatch> find_matches(const FrameSpan& a,
   {
     assert(segment.size() > 0);
 
-    std::pair<FrameSpan, FrameSpan> matchingspans = find_best_subspan_match(segment,
-                                                                            search_area,
-                                                                            params);
+    std::vector<FrameSpanMatch> matchingspans = find_matches_in_segment(segment,
+                                                                        search_area,
+                                                                        params);
 
-    if (matchingspans.first.count > 0)
+    for (const auto& m : matchingspans)
     {
-      matches.push_back(to_match(matchingspans));
-      search_area = FrameSpan(*b.video, matchingspans.second.endOffset(), -1);
+      matches.push_back(to_match(m));
+      search_area = FrameSpan(*b.video, m.second.endOffset(), -1);
     }
   }
 
