@@ -209,11 +209,13 @@ void MainWindow::updateLastOpenDir(const QString& path)
 
 void MainWindow::openFile(const QString& filePath)
 {
+  DubbingProject* project = nullptr;
+
   if (QFileInfo(filePath).suffix().toUpper() == "TXT")
   {
     try
     {
-      m_project = new DubbingProject(filePath, this);
+      project = new DubbingProject(filePath, this);
 
     } catch (std::exception& ex)
     {
@@ -221,37 +223,54 @@ void MainWindow::openFile(const QString& filePath)
       return;
     }
 
-    if (!m_project || m_project->projectFilePath().isEmpty())
+    if (!project || project->projectFilePath().isEmpty())
     {
       QMessageBox::information(this,
                                "Error",
                                "Could not open project.\nAre you sure this is a DigiDub project?");
       return;
     }
-
-    m_undoStack->setActive();
-
-    if (!m_project->videoFilePath().isEmpty())
-    {
-      m_primaryMedia = new MediaObject(m_project->resolvePath(m_project->videoFilePath()), this);
-      m_primaryMedia->extractAudioInfo();
-    }
-
-    if (!m_project->audioSourceFilePath().isEmpty())
-    {
-      m_secondaryMedia = new MediaObject(m_project->resolvePath(m_project->audioSourceFilePath()),
-                                         this);
-      m_secondaryMedia->extractAudioInfo();
-    }
-
-    if (m_primaryMedia && m_secondaryMedia)
-    {
-      launchMatchEditor();
-    }
   }
   else
   {
     qDebug() << "Unknown file type";
+    return;
+  }
+
+  if (!project)
+  {
+    return;
+  }
+
+  if (m_project)
+  {
+    if (!closeProject())
+    {
+      project->deleteLater();
+      return;
+    }
+  }
+
+  m_project = project;
+
+  m_undoStack->setActive();
+
+  if (!m_project->videoFilePath().isEmpty())
+  {
+    m_primaryMedia = new MediaObject(m_project->resolvePath(m_project->videoFilePath()), this);
+    m_primaryMedia->extractAudioInfo();
+  }
+
+  if (!m_project->audioSourceFilePath().isEmpty())
+  {
+    m_secondaryMedia = new MediaObject(m_project->resolvePath(m_project->audioSourceFilePath()),
+                                       this);
+    m_secondaryMedia->extractAudioInfo();
+  }
+
+  if (m_primaryMedia && m_secondaryMedia)
+  {
+    launchMatchEditor();
   }
 
   m_matchListWindow = new MatchListWindow(*m_project, *this, this);
@@ -272,6 +291,68 @@ void MainWindow::openFile(const QString& filePath)
   });
 
   refreshUi();
+}
+
+// Close the current project.
+// Returns true if the project was actually closed or if there were
+// no project opened.
+// Returns false if the user cancelled the operation via a dialog.
+bool MainWindow::closeProject()
+{
+  if (!m_project)
+  {
+    return true;
+  }
+
+  if (m_undoStack->isActive() && !m_undoStack->isClean())
+  {
+    int btn = QMessageBox::question(this,
+                                    "Exit",
+                                    "Unsaved changes will be lost. Continue ?",
+                                    QMessageBox::Ok | QMessageBox::Cancel,
+                                    QMessageBox::Cancel);
+
+    if (btn != QMessageBox::Ok)
+    {
+      return false;
+    }
+  }
+
+  m_undoStack->clear();
+  m_undoStack->setActive(false);
+
+  if (m_matchListWindow)
+  {
+    m_matchListWindow->deleteLater();
+    m_matchListWindow = nullptr;
+  }
+
+  if (m_matchEditorWidget)
+  {
+    centralWidget()->removeWidget(m_matchEditorWidget);
+    m_matchEditorWidget->setVisible(false);
+    m_matchEditorWidget->deleteLater();
+    m_matchEditorWidget = nullptr;
+  }
+
+  if (m_secondaryMedia)
+  {
+    m_secondaryMedia->deleteLater();
+    m_secondaryMedia = nullptr;
+  }
+
+  if (m_primaryMedia)
+  {
+    m_primaryMedia->deleteLater();
+    m_primaryMedia = nullptr;
+  }
+
+  m_project->deleteLater();
+  m_project = nullptr;
+
+  refreshUi();
+
+  return true;
 }
 
 QStackedWidget* MainWindow::centralWidget() const
@@ -318,12 +399,6 @@ void MainWindow::setThumbnailSize(int n)
 
 void MainWindow::actOpen()
 {
-  if (m_project)
-  {
-    QMessageBox::information(this, "Nope", "Project already loaded.");
-    return;
-  }
-
   QString path = QFileDialog::getOpenFileName(this,
                                               "Open",
                                               getLastOpenDir(),
@@ -370,58 +445,7 @@ void MainWindow::actSave()
 
 void MainWindow::actClose()
 {
-  if (!m_project)
-  {
-    return;
-  }
-
-  if (m_undoStack->isActive() && !m_undoStack->isClean())
-  {
-    int btn = QMessageBox::question(this,
-                                    "Exit",
-                                    "Unsaved changes will be lost. Continue ?",
-                                    QMessageBox::Ok | QMessageBox::Cancel,
-                                    QMessageBox::Cancel);
-
-    if (btn != QMessageBox::Ok)
-    {
-      return;
-    }
-  }
-
-  m_undoStack->clear();
-  m_undoStack->setActive(false);
-
-  if (m_matchListWindow)
-  {
-    m_matchListWindow->deleteLater();
-    m_matchListWindow = nullptr;
-  }
-
-  if (m_matchEditorWidget)
-  {
-    centralWidget()->removeWidget(m_matchEditorWidget);
-    m_matchEditorWidget->setVisible(false);
-    m_matchEditorWidget->deleteLater();
-    m_matchEditorWidget = nullptr;
-  }
-
-  if (m_secondaryMedia)
-  {
-    m_secondaryMedia->deleteLater();
-    m_secondaryMedia = nullptr;
-  }
-
-  if (m_primaryMedia)
-  {
-    m_primaryMedia->deleteLater();
-    m_primaryMedia = nullptr;
-  }
-
-  m_project->deleteLater();
-  m_project = nullptr;
-
-  refreshUi();
+  closeProject();
 }
 
 void MainWindow::doExport()
@@ -551,7 +575,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 void MainWindow::refreshUi()
 {
-  m_actions.openProject->setEnabled(!m_project);
+  m_actions.openProject->setEnabled(true);
   m_actions.saveProject->setEnabled(m_project && !m_undoStack->isClean());
   m_actions.closeProject->setEnabled(m_project);
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);

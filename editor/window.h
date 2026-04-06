@@ -40,6 +40,7 @@ public:
   void updateLastOpenDir(const QString& path);
 
   void openFile(const QString& filePath);
+  bool closeProject();
 
   QStackedWidget* centralWidget() const;
   MatchEditorWidget* currentMatchEditorWidget() const;
