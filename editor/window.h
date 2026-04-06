@@ -41,6 +41,7 @@ public:
 
   void openFile(const QString& filePath);
 
+  QStackedWidget* centralWidget() const;
   MatchEditorWidget* currentMatchEditorWidget() const;
 
   void findMatchAfter(MatchObject& matchObject,
@@ -60,6 +61,7 @@ public Q_SLOTS:
 protected Q_SLOTS:
   void actOpen();
   void actSave();
+  void actClose();
   void doExport();
   void toggleMatchListPopup();
   void insertMatchFromSelection();
@@ -89,6 +91,7 @@ private:
   {
     QAction* openProject = nullptr;
     QAction* saveProject = nullptr;
+    QAction* closeProject = nullptr;
     QAction* exportProject = nullptr;
     QAction* toggleMatchListWindow = nullptr;
     QAction* findMatchBefore = nullptr;

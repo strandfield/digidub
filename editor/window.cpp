@@ -88,6 +88,7 @@ MainWindow::MainWindow()
                                             QKeySequence("Ctrl+S"),
                                             this,
                                             &MainWindow::actSave);
+    m_actions.closeProject = menu->addAction("Close", this, &MainWindow::actClose);
 
     menu->addSeparator();
 
@@ -273,6 +274,11 @@ void MainWindow::openFile(const QString& filePath)
   refreshUi();
 }
 
+QStackedWidget* MainWindow::centralWidget() const
+{
+  return qobject_cast<QStackedWidget*>(QMainWindow::centralWidget());
+}
+
 void MainWindow::about()
 {
   if (!m_aboutDialog)
@@ -360,6 +366,62 @@ void MainWindow::actSave()
 
   m_project->save(savepath);
   m_undoStack->setClean();
+}
+
+void MainWindow::actClose()
+{
+  if (!m_project)
+  {
+    return;
+  }
+
+  if (m_undoStack->isActive() && !m_undoStack->isClean())
+  {
+    int btn = QMessageBox::question(this,
+                                    "Exit",
+                                    "Unsaved changes will be lost. Continue ?",
+                                    QMessageBox::Ok | QMessageBox::Cancel,
+                                    QMessageBox::Cancel);
+
+    if (btn != QMessageBox::Ok)
+    {
+      return;
+    }
+  }
+
+  m_undoStack->clear();
+  m_undoStack->setActive(false);
+
+  if (m_matchListWindow)
+  {
+    m_matchListWindow->deleteLater();
+    m_matchListWindow = nullptr;
+  }
+
+  if (m_matchEditorWidget)
+  {
+    centralWidget()->removeWidget(m_matchEditorWidget);
+    m_matchEditorWidget->setVisible(false);
+    m_matchEditorWidget->deleteLater();
+    m_matchEditorWidget = nullptr;
+  }
+
+  if (m_secondaryMedia)
+  {
+    m_secondaryMedia->deleteLater();
+    m_secondaryMedia = nullptr;
+  }
+
+  if (m_primaryMedia)
+  {
+    m_primaryMedia->deleteLater();
+    m_primaryMedia = nullptr;
+  }
+
+  m_project->deleteLater();
+  m_project = nullptr;
+
+  refreshUi();
 }
 
 void MainWindow::doExport()
@@ -491,6 +553,7 @@ void MainWindow::refreshUi()
 {
   m_actions.openProject->setEnabled(!m_project);
   m_actions.saveProject->setEnabled(m_project && !m_undoStack->isClean());
+  m_actions.closeProject->setEnabled(m_project);
   m_actions.exportProject->setEnabled(m_project != nullptr && m_primaryMedia);
   m_actions.toggleMatchListWindow->setEnabled(m_project);
   m_actions.toggleMatchListWindow->setChecked(m_matchListWindow && m_matchListWindow->isVisible());
@@ -543,7 +606,7 @@ void MainWindow::launchMatchEditor()
     }
   }
   m_matchEditorWidget = new MatchEditorWidget(*m_project, *m_primaryMedia, *m_secondaryMedia);
-  auto* sw = qobject_cast<QStackedWidget*>(centralWidget());
+  auto* sw = centralWidget();
   // TODO: clear QStackedWidget
 
   sw->addWidget(m_matchEditorWidget);
