@@ -17,8 +17,9 @@ void AddMatch::undo()
   m_project.removeMatch(m_match);
 }
 
-RemoveMatch::RemoveMatch(MatchObject& match, DubbingProject& project)
-    : m_project(project)
+RemoveMatch::RemoveMatch(MatchObject& match, DubbingProject& project, QUndoCommand* parent)
+    : QUndoCommand(parent)
+    , m_project(project)
     , m_match(&match)
 {
   setText("Remove match");
@@ -34,8 +35,9 @@ void RemoveMatch::undo()
   m_project.addMatch(m_match);
 }
 
-EditMatch::EditMatch(MatchObject& match, const VideoMatch& value)
-    : m_match(match)
+EditMatch::EditMatch(MatchObject& match, const VideoMatch& value, QUndoCommand* parent)
+    : QUndoCommand(parent)
+    , m_match(match)
     , m_prev_value(match.value())
     , m_new_value(value)
 {

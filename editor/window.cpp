@@ -130,6 +130,10 @@ MainWindow::MainWindow()
                                                    QKeySequence("Ctrl+D"),
                                                    this,
                                                    &MainWindow::deleteCurrentMatch);
+
+    m_actions.mergeWithNextMatch = menu->addAction("Merge with next match",
+                                                   this,
+                                                   &MainWindow::mergeCurrentWithNextMatch);
   }
 
   if (QMenu* menu = menuBar()->addMenu("View"))
@@ -552,6 +556,26 @@ void MainWindow::deleteCurrentMatch()
   m_undoStack->push(new RemoveMatch(*mob, *m_project));
 }
 
+void MainWindow::mergeCurrentWithNextMatch()
+{
+  MatchObject* mob = m_matchEditorWidget->currentMatchObject();
+  MatchObject* next = mob ? mob->next() : nullptr;
+
+  if (!next)
+  {
+    return;
+  }
+
+  VideoMatch val = mob->value();
+  val.a.setEnd(next->value().a.end());
+  val.b.setEnd(next->value().b.end());
+
+  auto* cmd = new QUndoCommand("Merge match");
+  new RemoveMatch(*next, *m_project, cmd);
+  new EditMatch(*mob, val, cmd);
+  m_undoStack->push(cmd);
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
   if (m_undoStack->isActive() && !m_undoStack->isClean())
@@ -591,6 +615,8 @@ void MainWindow::refreshUi()
   m_actions.insertMatch->setEnabled(m_matchEditorWidget);
 
   m_actions.deleteCurrentMatch->setEnabled(has_selected_match_object);
+  m_actions.mergeWithNextMatch->setEnabled(has_selected_match_object
+                                           && m_matchEditorWidget->currentMatchObject()->next());
 
   updateWindowTitle();
 }

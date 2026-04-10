@@ -24,7 +24,7 @@ private:
 class RemoveMatch : public QUndoCommand
 {
 public:
-  RemoveMatch(MatchObject& match, DubbingProject& project);
+  RemoveMatch(MatchObject& match, DubbingProject& project, QUndoCommand* parent = nullptr);
 
   void redo() final;
   void undo() final;
@@ -37,7 +37,7 @@ private:
 class EditMatch : public QUndoCommand
 {
 public:
-  EditMatch(MatchObject& match, const VideoMatch& value);
+  EditMatch(MatchObject& match, const VideoMatch& value, QUndoCommand* parent = nullptr);
 
   void redo() final;
   void undo() final;

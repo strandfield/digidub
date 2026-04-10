@@ -67,6 +67,7 @@ protected Q_SLOTS:
   void toggleMatchListPopup();
   void insertMatchFromSelection();
   void deleteCurrentMatch();
+  void mergeCurrentWithNextMatch();
 
 protected:
   void closeEvent(QCloseEvent* event) override;
@@ -99,6 +100,7 @@ private:
     QAction* findMatchAfter = nullptr;
     QAction* insertMatch = nullptr;
     QAction* deleteCurrentMatch = nullptr;
+    QAction* mergeWithNextMatch = nullptr;
   } m_actions;
   MatchEditorWidget* m_matchEditorWidget = nullptr;
   MatchListWindow* m_matchListWindow = nullptr;

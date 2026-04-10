@@ -59,6 +59,9 @@ public:
   int64_t duration() const;
   double toSeconds() const;
 
+  void setStart(int64_t s);
+  void setEnd(int64_t e);
+
   bool contains(int64_t t) const;
 
   QString toString() const;
@@ -88,6 +91,16 @@ inline int64_t TimeSegment::duration() const
 inline double TimeSegment::toSeconds() const
 {
   return duration() / double(1000);
+}
+
+inline void TimeSegment::setStart(int64_t s)
+{
+  m_start = s;
+}
+
+inline void TimeSegment::setEnd(int64_t e)
+{
+  m_end = e;
 }
 
 inline bool TimeSegment::contains(int64_t t) const
